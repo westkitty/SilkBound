@@ -847,13 +847,12 @@ func _on_hud_action(action: String) -> void:
 		return
 	if action.begins_with("toggle:"):
 		var setting_key := action.trim_prefix("toggle:")
-		var settings_key := (
+		var settings_key: String = String(
 			{
 				"left_handed": "left_handed",
 				"reduced_shake": "reduced_shake",
 				"reduced_flash": "reduced_flash"
-			}
-			. get(setting_key, setting_key)
+			}.get(setting_key, setting_key)
 		)
 		settings[settings_key] = not bool(settings.get(settings_key, false))
 		_save_settings()
