@@ -108,9 +108,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log
-          if grep -Eiq 'SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log; then
-            echo "The GDScript test run emitted a critical error." >&2
+          test_status=0
+          "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
+          if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log; then
+            echo "::error file=tests/run_all.gd::GDScript tests failed with exit status $test_status. Diagnostics follow."
+            while IFS= read -r line; do
+              echo "::error file=tests/run_all.gd::$line"
+            done < <(grep -Ein -B 2 -A 4 'FAIL|SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log | tail -n 80 || tail -n 80 tests/test-results.log)
             exit 1
           fi
 
