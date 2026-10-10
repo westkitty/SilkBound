@@ -72,8 +72,12 @@ jobs:
           fi
           unzip -q "$install_root/editor.zip" -d "$install_root/editor"
           unzip -q "$install_root/templates.tpz" -d "$install_root/templates"
-          godot_exe="$(find "$install_root/editor" -maxdepth 2 -type f -name 'Godot_v${GODOT_VERSION}-stable_linux.x86_64' -print -quit)"
-          test -n "$godot_exe"
+          godot_exe="$(find "$install_root/editor" -type f -name "Godot_v${GODOT_VERSION}-stable_linux.x86_64*" -print -quit)"
+          if [[ -z "$godot_exe" ]]; then
+            archive_files="$(find "$install_root/editor" -type f -printf '%P, ' | cut -c1-300)"
+            echo "::error file=.github/workflows/android.yml,line=60::Godot editor executable not found; extracted files: $archive_files"
+            exit 1
+          fi
           chmod +x "$godot_exe"
           ln -sf "$godot_exe" "$install_root/godot"
           echo "GODOT_BIN=$install_root/godot" >> "$GITHUB_ENV"
