@@ -48,6 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          trap 'echo "::error file=.github/workflows/android.yml,line=60::Godot install failed at: ${BASH_COMMAND}"' ERR
           install_root="$RUNNER_TEMP/silkbound-godot"
           mkdir -p "$install_root/editor" "$install_root/templates"
           base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
@@ -57,8 +58,18 @@ jobs:
           curl --fail --location --retry 3 --retry-delay 2 \
             "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
             --output "$install_root/templates.tpz"
-          printf '%s  %s\n' "$GODOT_EDITOR_SHA256" "$install_root/editor.zip" | sha256sum --check --status
-          printf '%s  %s\n' "$GODOT_TEMPLATES_SHA256" "$install_root/templates.tpz" | sha256sum --check --status
+          editor_digest="$(sha256sum "$install_root/editor.zip" | awk '{print $1}')"
+          echo "::notice title=Godot editor SHA-256::$editor_digest"
+          if [[ "$editor_digest" != "$GODOT_EDITOR_SHA256" ]]; then
+            echo "::error file=.github/workflows/android.yml,line=60::Godot editor checksum mismatch (actual $editor_digest)."
+            exit 1
+          fi
+          templates_digest="$(sha256sum "$install_root/templates.tpz" | awk '{print $1}')"
+          echo "::notice title=Godot templates SHA-256::$templates_digest"
+          if [[ "$templates_digest" != "$GODOT_TEMPLATES_SHA256" ]]; then
+            echo "::error file=.github/workflows/android.yml,line=60::Godot templates checksum mismatch (actual $templates_digest)."
+            exit 1
+          fi
           unzip -q "$install_root/editor.zip" -d "$install_root/editor"
           unzip -q "$install_root/templates.tpz" -d "$install_root/templates"
           godot_exe="$(find "$install_root/editor" -maxdepth 2 -type f -name 'Godot_v${GODOT_VERSION}-stable_linux.x86_64' -print -quit)"
