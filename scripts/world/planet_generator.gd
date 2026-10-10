@@ -99,20 +99,6 @@ static func generate(
 				):
 					cells[y * width + x] = ore
 
-	# A guaranteed, reachable starter outcrop prevents a bad seed from soft-locking repair.
-	var guaranteed_x := 15
-	var guaranteed_y := surface[guaranteed_x]
-	cells[guaranteed_y * width + guaranteed_x] = Tiles.Tile.SCRAP
-	cells[(guaranteed_y + 1) * width + guaranteed_x] = Tiles.Tile.FERRITE
-	cells[(guaranteed_y + 1) * width + guaranteed_x + 1] = Tiles.Tile.COPPER
-	cells[(guaranteed_y + 2) * width + guaranteed_x] = Tiles.Tile.FERRITE
-	cells[(guaranteed_y + 2) * width + guaranteed_x + 1] = Tiles.Tile.SCRAP
-	if biome == Biome.GLASSFALL:
-		cells[(guaranteed_y + 1) * width + guaranteed_x + 2] = Tiles.Tile.CRYSTAL
-		cells[(guaranteed_y + 2) * width + guaranteed_x + 2] = Tiles.Tile.CRYSTAL
-	elif biome == Biome.DROWNED_REMNANT:
-		cells[(guaranteed_y + 1) * width + guaranteed_x + 2] = Tiles.Tile.ARCHIVE
-
 	# Deliberately small, climbable salvage shelters: generated terrain, not decorative set dressing.
 	var structures: Array[Dictionary] = []
 	var structure_count := 3
@@ -136,6 +122,7 @@ static func generate(
 	# A clear, level landing shelf guarantees safe spawning and a visible way back to the ship.
 	var landing_y := surface[SPAWN_X]
 	for x in range(2, 20):
+		surface[x] = landing_y
 		for y in range(landing_y - 5, landing_y):
 			cells[y * width + x] = Tiles.Tile.AIR
 		cells[landing_y * width + x] = (
@@ -143,6 +130,20 @@ static func generate(
 			if biome == Biome.ASHLANDS
 			else (Tiles.Tile.GLASS if biome == Biome.GLASSFALL else Tiles.Tile.SILT)
 		)
+
+	# Place the guaranteed salvage after clearing the shelf so no seed can erase it.
+	var guaranteed_x := 15
+	var guaranteed_y := surface[guaranteed_x]
+	cells[guaranteed_y * width + guaranteed_x] = Tiles.Tile.SCRAP
+	cells[(guaranteed_y + 1) * width + guaranteed_x] = Tiles.Tile.FERRITE
+	cells[(guaranteed_y + 1) * width + guaranteed_x + 1] = Tiles.Tile.COPPER
+	cells[(guaranteed_y + 2) * width + guaranteed_x] = Tiles.Tile.FERRITE
+	cells[(guaranteed_y + 2) * width + guaranteed_x + 1] = Tiles.Tile.SCRAP
+	if biome == Biome.GLASSFALL:
+		cells[(guaranteed_y + 1) * width + guaranteed_x + 2] = Tiles.Tile.CRYSTAL
+		cells[(guaranteed_y + 2) * width + guaranteed_x + 2] = Tiles.Tile.CRYSTAL
+	elif biome == Biome.DROWNED_REMNANT:
+		cells[(guaranteed_y + 1) * width + guaranteed_x + 2] = Tiles.Tile.ARCHIVE
 
 	return {
 		"seed": world_seed,

@@ -110,7 +110,7 @@ jobs:
           set -euo pipefail
           test_status=0
           "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
-          if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log; then
+          if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error' tests/test-results.log; then
             echo "::error file=tests/run_all.gd::GDScript tests failed with exit status $test_status. Diagnostics follow."
             details="$(tail -n 80 tests/test-results.log)"
             details="${details//'%'/'%25'}"

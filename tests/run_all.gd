@@ -215,11 +215,12 @@ func _test_world_changes_and_terraforming() -> void:
 	)
 	var mined := world.mine_cell(15, surface_y, 120.0)
 	_check(
-		bool(mined["broken"]) and world.get_tile(15, surface_y) == Tiles.Tile.AIR,
+		bool(mined.get("broken", false)) and world.get_tile(15, surface_y) == Tiles.Tile.AIR,
 		"mining removes a real terrain cell"
 	)
+	var mined_drop: Dictionary = mined.get("drop", {})
 	_check(
-		String(mined["drop"]["item"]) == "scrap" and int(mined["drop"]["amount"]) == 2,
+		String(mined_drop.get("item", "")) == "scrap" and int(mined_drop.get("amount", 0)) == 2,
 		"removed wreckage yields its correct pickup data"
 	)
 	var placement_x := -1
