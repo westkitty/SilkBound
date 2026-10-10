@@ -100,7 +100,7 @@ jobs:
             echo "::error file=project.godot::Godot import failed with exit status $import_status. Last import diagnostics follow."
             while IFS= read -r line; do
               echo "::error file=project.godot::$line"
-            done < <(tail -n 40 godot-import.log)
+            done < <(grep -Ein -B 2 -A 4 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-import.log | tail -n 80 || true)
             exit 1
           fi
 
