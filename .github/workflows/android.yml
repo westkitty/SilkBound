@@ -112,9 +112,11 @@ jobs:
           "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
           if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log; then
             echo "::error file=tests/run_all.gd::GDScript tests failed with exit status $test_status. Diagnostics follow."
-            while IFS= read -r line; do
-              echo "::error file=tests/run_all.gd::$line"
-            done < <(grep -Ein -B 2 -A 4 'FAIL|SCRIPT ERROR|Parse Error|ERROR:' tests/test-results.log | tail -n 80 || tail -n 80 tests/test-results.log)
+            details="$(tail -n 80 tests/test-results.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error file=tests/run_all.gd::$details"
             exit 1
           fi
 
