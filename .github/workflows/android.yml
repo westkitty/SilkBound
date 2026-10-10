@@ -149,8 +149,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          "$GODOT_BIN" --headless --path . --export-debug "Android" build/SilkBound-debug.apk 2>&1 | tee android-export.log
-          test -s build/SilkBound-debug.apk
+          export_status=0
+          "$GODOT_BIN" --headless --path . --export-debug "Android" build/SilkBound-debug.apk 2>&1 | tee android-export.log || export_status=$?
+          if [[ "$export_status" -ne 0 ]] || [[ ! -s build/SilkBound-debug.apk ]]; then
+            echo "::error file=export_presets.cfg::Android debug export failed with exit status $export_status. Diagnostics follow."
+            details="$(tail -n 80 android-export.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error file=export_presets.cfg::$details"
+            exit 1
+          fi
 
       - name: Validate APK package and ARM64 payload
         shell: bash
