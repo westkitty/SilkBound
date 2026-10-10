@@ -93,9 +93,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$GODOT_BIN" --headless --editor --path . --import --quit 2>&1 | tee godot-import.log
-          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-import.log; then
-            echo "Godot import emitted a critical error." >&2
+          import_status=0
+          "$GODOT_BIN" --headless --editor --path . --import --quit >godot-import.log 2>&1 || import_status=$?
+          cat godot-import.log
+          if [[ "$import_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-import.log; then
+            echo "::error file=project.godot::Godot import failed with exit status $import_status. Last import diagnostics follow."
+            while IFS= read -r line; do
+              echo "::error file=project.godot::$line"
+            done < <(tail -n 40 godot-import.log)
             exit 1
           fi
 
