@@ -120,9 +120,7 @@ func _process(delta: float) -> void:
 	if _scan_highlight_clock > 0.0:
 		_scan_highlight_clock -= delta
 		if _scan_highlight_clock <= 0.0:
-			world.scan_highlights.clear()
-			for chunk in world.chunk_views.values():
-				(chunk as CanvasItem).queue_redraw()
+			world.clear_scan_highlights()
 	if _survivor_prompt_clock > 0.0:
 		_survivor_prompt_clock -= delta
 		if _survivor_prompt_clock <= 0.0:
@@ -1201,6 +1199,36 @@ func _scan() -> void:
 	if first_record:
 		discoveries.append(current_planet_id)
 	var summary_parts: Array[String] = []
+	# Real scanner coordinates give one actionable local return, not a global waypoint.
+	var signal_priority: Array[String] = ["ferrite", "wreckage", "crystal", "copper"]
+	if current_planet_id == "ashlands":
+		if inventory.count("scrap") < 6:
+			signal_priority = ["wreckage", "ferrite", "fiber", "copper"]
+		else:
+			signal_priority = ["ferrite", "wreckage", "fiber", "copper"]
+	elif current_planet_id == "glassfall":
+		signal_priority = ["fault", "crystal", "glass", "ferrite"]
+	elif current_planet_id == "drowned":
+		signal_priority = ["archive", "wreckage", "ferrite", "water"]
+	var returns: Dictionary = result.get("nearest", {})
+	var scan_origin := world.world_to_cell(player.global_position)
+	for category in signal_priority:
+		if not returns.has(category):
+			continue
+		var found: Dictionary = returns[category]
+		var dx := int(found["x"]) - scan_origin.x
+		var dy := int(found["y"]) - scan_origin.y
+		var direction: Array[String] = []
+		if dx != 0:
+			direction.append("%d %s" % [absi(dx), "E" if dx > 0 else "W"])
+		if dy != 0:
+			direction.append("%d %s" % [absi(dy), "DOWN" if dy > 0 else "UP"])
+		if direction.is_empty():
+			direction.append("HERE")
+		summary_parts.append("SIGNAL %s  /  %s" % [
+			category.to_upper(), " ".join(PackedStringArray(direction))
+		])
+		break
 	for key in [
 		"ferrite", "copper", "crystal", "glass", "wreckage", "archive", "fiber", "water", "fault"
 	]:

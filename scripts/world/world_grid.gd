@@ -14,11 +14,15 @@ var world_seed: int = 0
 var world_width: int = 0
 var world_height: int = 0
 var base_cells := PackedInt32Array()
+# Resolved tile IDs avoid string allocation/hash lookup in drawing and collision hot paths.
+var _resolved_cells := PackedInt32Array()
 var surface_heights := PackedInt32Array()
 var structures: Array = []
 var modifications: Dictionary = {}
 var cracks: Dictionary = {}
 var scan_highlights: Dictionary = {}
+var _scan_highlight_chunks: Dictionary = {}
+var scan_redraw_request_count := 0
 var chunk_views: Dictionary = {}
 var collision_chunks: Dictionary = {}
 var spawn_cell := Vector2i(10, 20)
@@ -52,10 +56,16 @@ func setup(
 	world_width = int(generated["width"])
 	world_height = int(generated["height"])
 	base_cells = generated["cells"]
+	_resolved_cells = base_cells.duplicate()
 	surface_heights = generated["surface"]
 	structures = generated["structures"]
 	spawn_cell = generated["spawn"]
 	modifications.clear()
+	cracks.clear()
+	scan_highlights.clear()
+	_scan_highlight_chunks.clear()
+	scan_redraw_request_count = 0
+	_dirty_chunks.clear()
 	for raw_index in saved_modifications.keys():
 		var index_text := String(raw_index)
 		if not index_text.is_valid_int():
@@ -69,6 +79,7 @@ func setup(
 			and tile_id <= Tiles.Tile.FAULT
 		):
 			modifications[index_text] = tile_id
+			_resolved_cells[index] = tile_id
 	var saved_spawn: Variant = saved_meta.get("spawn", [])
 	if saved_spawn is Array and saved_spawn.size() >= 2:
 		var x := int(saved_spawn[0])
@@ -83,11 +94,7 @@ func get_tile(x: int, y: int) -> int:
 		return Tiles.Tile.BASALT
 	if y >= world_height:
 		return Tiles.Tile.BASALT
-	var index := y * world_width + x
-	var key := str(index)
-	if modifications.has(key):
-		return int(modifications[key])
-	return int(base_cells[index])
+	return int(_resolved_cells[y * world_width + x])
 
 
 func cell_index(x: int, y: int) -> int:
@@ -167,6 +174,7 @@ func set_tile(x: int, y: int, tile_id: int) -> bool:
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
+	_resolved_cells[index] = tile_id
 	cracks.erase(index)
 	_environment_revision += 1
 	_refresh_cell(x, y)
@@ -251,6 +259,8 @@ func apply_terraform(center_x: int, radius: int = 6) -> Dictionary:
 
 func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 	var origin := world_to_cell(center)
+	var radius := maxi(0, radius_cells)
+	var radius_squared := radius * radius
 	var counts := {
 		"ore": 0,
 		"ferrite": 0,
@@ -263,14 +273,15 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 		"fiber": 0,
 		"fault": 0
 	}
-	scan_highlights.clear()
-	for y in range(
-		maxi(0, origin.y - radius_cells), mini(world_height, origin.y + radius_cells + 1)
-	):
-		for x in range(
-			maxi(0, origin.x - radius_cells), mini(world_width, origin.x + radius_cells + 1)
-		):
-			if Vector2(x - origin.x, y - origin.y).length() > float(radius_cells):
+	var nearest: Dictionary = {}
+	var next_highlights: Dictionary = {}
+	var next_chunks: Dictionary = {}
+	for y in range(maxi(0, origin.y - radius), mini(world_height, origin.y + radius + 1)):
+		for x in range(maxi(0, origin.x - radius), mini(world_width, origin.x + radius + 1)):
+			var dx := x - origin.x
+			var dy := y - origin.y
+			var distance_squared := dx * dx + dy * dy
+			if distance_squared > radius_squared:
 				continue
 			var tile_id := get_tile(x, y)
 			var category := ""
@@ -298,16 +309,41 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 			counts[category] = int(counts[category]) + 1
 			if category in ["ferrite", "copper", "crystal"]:
 				counts["ore"] = int(counts["ore"]) + 1
-			if (
-				category
-				in [
-					"ferrite", "copper", "crystal", "wreckage", "glass", "archive", "fiber", "fault"
-				]
-			):
-				scan_highlights[str(cell_index(x, y))] = category
-	for chunk in chunk_views.values():
-		(chunk as CanvasItem).queue_redraw()
+			var previous: Dictionary = nearest.get(category, {})
+			if previous.is_empty() or distance_squared < int(previous["distance_squared"]):
+				nearest[category] = {
+					"x": x, "y": y, "distance_squared": distance_squared
+				}
+			if category in [
+				"ferrite", "copper", "crystal", "wreckage", "glass", "archive", "fiber", "fault"
+			]:
+				next_highlights[str(cell_index(x, y))] = category
+				next_chunks[int(x / CHUNK_WIDTH)] = true
+	counts["nearest"] = nearest
+	# Only paint chunks whose scan overlay changed; an identical rescan draws nothing.
+	if next_highlights != scan_highlights:
+		var changed_chunks := _scan_highlight_chunks.duplicate()
+		for chunk_index in next_chunks.keys():
+			changed_chunks[chunk_index] = true
+		scan_highlights = next_highlights
+		_scan_highlight_chunks = next_chunks
+		_request_scan_redraw(changed_chunks)
 	return counts
+
+
+func clear_scan_highlights() -> void:
+	if scan_highlights.is_empty():
+		return
+	scan_highlights.clear()
+	_request_scan_redraw(_scan_highlight_chunks)
+	_scan_highlight_chunks.clear()
+
+
+func _request_scan_redraw(chunks: Dictionary) -> void:
+	for chunk_index in chunks.keys():
+		if chunk_views.has(chunk_index):
+			(chunk_views[chunk_index] as CanvasItem).queue_redraw()
+			scan_redraw_request_count += 1
 
 
 func is_underwater(world_position: Vector2) -> bool:
@@ -399,6 +435,7 @@ func _set_tile_batched(x: int, y: int, tile_id: int) -> void:
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
+	_resolved_cells[index] = tile_id
 	cracks.erase(index)
 	var chunk_index := int(x / CHUNK_WIDTH)
 	_dirty_chunks[chunk_index] = true

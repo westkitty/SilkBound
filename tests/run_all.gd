@@ -31,6 +31,7 @@ func _run() -> void:
 	await _test_released_touch_outside_controls()
 	_test_survival_damage_timing()
 	await _test_environment_cache_invalidation()
+	await _test_tile_lookup_equivalence_and_benchmark()
 	await _test_safe_reentry_placement()
 	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
@@ -246,6 +247,61 @@ func _test_safe_reentry_placement() -> void:
 	await process_frame
 
 
+func _test_tile_lookup_equivalence_and_benchmark() -> void:
+	var perf_world := WorldGrid.new()
+	root.add_child(perf_world)
+	perf_world.setup("tile-benchmark", 553812, Generator.Biome.GLASSFALL)
+	var cell := Vector2i(32, perf_world.surface_at(32))
+	var old_tile := perf_world.get_tile(cell.x, cell.y)
+	perf_world.set_tile(cell.x, cell.y, Tiles.Tile.AIR)
+	_check(
+		perf_world.get_tile(cell.x, cell.y) == Tiles.Tile.AIR
+		and perf_world.base_cells[perf_world.cell_index(cell.x, cell.y)] == old_tile,
+		"resolved tile cache reflects edits without mutating seeded base geology"
+	)
+	var saved_edits := perf_world.modifications.duplicate(true)
+	perf_world.cracks[perf_world.cell_index(cell.x, cell.y)] = 11.0
+	perf_world.scan_highlights[str(perf_world.cell_index(cell.x, cell.y))] = "ferrite"
+	perf_world.setup("tile-benchmark", 553812, Generator.Biome.GLASSFALL, saved_edits)
+	_check(
+		perf_world.get_tile(cell.x, cell.y) == Tiles.Tile.AIR
+		and perf_world.modifications == saved_edits,
+		"cached tile IDs reconstruct exactly from persistent edit indices"
+	)
+	_check(
+		perf_world.cracks.is_empty() and perf_world.scan_highlights.is_empty(),
+		"world setup clears transient crack and scanner state"
+	)
+	var width := perf_world.world_width
+	var edits: Dictionary = perf_world.modifications
+	var base: PackedInt32Array = perf_world.base_cells
+	var old_checksum := 0
+	var baseline_start := Time.get_ticks_usec()
+	for iteration in range(8):
+		for y in range(8, 72):
+			for x in range(12, 220):
+				var index := y * width + x
+				var key := str(index)
+				old_checksum += int(edits[key]) if edits.has(key) else int(base[index])
+	var legacy_usec := Time.get_ticks_usec() - baseline_start
+	var new_checksum := 0
+	var cached_start := Time.get_ticks_usec()
+	for iteration in range(8):
+		for y in range(8, 72):
+			for x in range(12, 220):
+				new_checksum += perf_world.get_tile(x, y)
+	var cached_usec := Time.get_ticks_usec() - cached_start
+	_check(
+		new_checksum == old_checksum,
+		"cached and prior tile-read paths agree over 106496 matched world queries"
+	)
+	print("SILKBOUND PERF tile_reads=106496 legacy_usec=%d cached_usec=%d" % [
+		legacy_usec, cached_usec
+	])
+	perf_world.queue_free()
+	await process_frame
+
+
 func _test_environment_cache_invalidation() -> void:
 	var sample_world := WorldGrid.new()
 	root.add_child(sample_world)
@@ -384,6 +440,22 @@ func _test_scanner_resource_coverage() -> void:
 		var offset: Vector2i = sample["offset"]
 		scan_world.set_tile(origin.x + offset.x, origin.y + offset.y, int(sample["tile"]))
 	var result := scan_world.scan_area(scan_world.cell_to_world(origin), 4)
+	var scan_draws := scan_world.scan_redraw_request_count
+	_check(scan_draws == 1, "nearby scan redraws one local chunk instead of all nine")
+	print("SILKBOUND PERF scan_redraw_requests legacy=9 localized=%d" % scan_draws)
+	var second_result := scan_world.scan_area(scan_world.cell_to_world(origin), 4)
+	_check(
+		scan_world.scan_redraw_request_count == scan_draws
+		and int(second_result["ore"]) == int(result["ore"]),
+		"unchanged repeated scan skips all terrain redraw requests"
+	)
+	var signals: Dictionary = result["nearest"]
+	var ferrite_signal: Dictionary = signals["ferrite"]
+	_check(
+		int(ferrite_signal["x"]) == origin.x
+		and int(ferrite_signal["y"]) == origin.y,
+		"scanner nearest-return coordinates identify the true ore cell"
+	)
 	for category in sample_cells:
 		_check(
 			int(result[category]) == 1,
@@ -413,6 +485,17 @@ func _test_scanner_resource_coverage() -> void:
 	_check(
 		not scan_world.scan_highlights.has(water_key),
 		"water remains visible without dense scan outlines"
+	)
+	scan_world.clear_scan_highlights()
+	_check(
+		scan_world.scan_highlights.is_empty()
+		and scan_world.scan_redraw_request_count == scan_draws + 1,
+		"scanner expiry clears only the previously highlighted chunk"
+	)
+	scan_world.clear_scan_highlights()
+	_check(
+		scan_world.scan_redraw_request_count == scan_draws + 1,
+		"repeated expiry never schedules duplicate redraws"
 	)
 	scan_world.queue_free()
 	await process_frame
@@ -634,7 +717,8 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	)
 	_check(
 		(
-			hud.message_label.text.contains("GLASS 1 CELLS")
+			hud.message_label.text.contains("SIGNAL WRECKAGE")
+			and hud.message_label.text.contains("GLASS 1 CELLS")
 			and hud.message_label.text.contains("FERRITE ")
 			and hud.message_label.text.contains("COPPER ")
 			and hud.message_label.text.contains("CRYSTAL 1 CELLS")
