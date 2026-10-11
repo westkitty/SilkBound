@@ -414,8 +414,9 @@ func _build_layout() -> void:
 	message_label.anchor_bottom = 1.0
 	message_label.offset_left = -340
 	message_label.offset_right = 340
-	message_label.offset_top = -72
-	message_label.offset_bottom = -42
+	message_label.offset_top = -126
+	message_label.offset_bottom = -76
+	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message_label.visible = false
 	message_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(message_label)
@@ -640,7 +641,11 @@ func _add_row(text: String, action: String, disabled: bool) -> void:
 	var button := Button.new()
 	button.text = text
 	button.disabled = disabled
-	button.custom_minimum_size = Vector2(0, 44 if text.length() < 85 else 72)
+	var estimated_lines := 0
+	for text_line in text.split("\n"):
+		estimated_lines += maxi(1, ceili(float(text_line.length()) / 64.0))
+	button.custom_minimum_size = Vector2(0, maxf(44.0, float(estimated_lines) * 21.0 + 14.0))
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.add_theme_font_size_override("font_size", 16)

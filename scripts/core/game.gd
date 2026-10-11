@@ -1135,7 +1135,8 @@ func _scan() -> void:
 	var result := world.scan_area(player.global_position, range_cells)
 	_scan_highlight_clock = 8.0
 	play_sound("scan")
-	if not discoveries.has(current_planet_id):
+	var first_record := not discoveries.has(current_planet_id)
+	if first_record:
 		discoveries.append(current_planet_id)
 	var summary_parts: Array[String] = []
 	for key in ["ore", "wreckage", "archive", "fiber", "water", "fault"]:
@@ -1163,7 +1164,9 @@ func _scan() -> void:
 			summary_parts.append("FAULT ROUTE LOGGED")
 	if summary_parts.is_empty():
 		summary_parts.append("NO LOCAL RESOURCE RETURNS")
-	hud.show_message("SCAN  /  " + "   ·   ".join(PackedStringArray(summary_parts)), 3.0)
+	if first_record:
+		summary_parts.append("FIELD RECORD STORED")
+	hud.show_message("SCAN  /  " + "   ·   ".join(PackedStringArray(summary_parts)), 3.8)
 	hud.refresh()
 
 

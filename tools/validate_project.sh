@@ -23,7 +23,13 @@ run_checked() {
   local log="$tmpdir/${label}.log"
   echo "== $label =="
   (cd "$ROOT" && "$GODOT_BIN" "$@") 2>&1 | tee "$log"
-  if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' "$log"; then
+  local diagnostic_log="$log"
+  if [[ "$label" == "tests" ]]; then
+    # Backup recovery intentionally parses a malformed save; ignore only that expected diagnostic.
+    diagnostic_log="$tmpdir/tests-unexpected-diagnostics.log"
+    grep -Ev '^ERROR: Parse JSON failed\. Error at line 0: Expected key$' "$log" > "$diagnostic_log" || true
+  fi
+  if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' "$diagnostic_log"; then
     echo "Critical Godot diagnostic found during $label." >&2
     exit 1
   fi

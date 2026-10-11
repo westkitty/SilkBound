@@ -56,6 +56,27 @@ def ellipse(img, cx, cy, rx, ry, color, fill=True):
                 put(img, x, y, color)
 
 
+def polygon(img, points, color):
+    """Fill a low-resolution polygon without antialiasing or external image libraries."""
+    if len(points) < 3:
+        return
+    min_y = max(0, min(point[1] for point in points))
+    max_y = min(len(img) - 1, max(point[1] for point in points))
+    for y in range(min_y, max_y + 1):
+        scan_y = y + 0.5
+        intersections = []
+        for index, (x0, y0) in enumerate(points):
+            x1, y1 = points[(index + 1) % len(points)]
+            if (y0 <= scan_y < y1) or (y1 <= scan_y < y0):
+                intersections.append(x0 + (scan_y - y0) * (x1 - x0) / (y1 - y0))
+        intersections.sort()
+        for index in range(0, len(intersections) - 1, 2):
+            left = max(0, math.ceil(intersections[index]))
+            right = min(len(img[0]), math.ceil(intersections[index + 1]))
+            for x in range(left, right):
+                put(img, x, y, color)
+
+
 def save_png(path: Path, img):
     height, width = len(img), len(img[0])
     raw = bytearray()
@@ -288,8 +309,8 @@ def make_backgrounds():
         "glassfall": ((9, 14, 31, 255), (23, 30, 56, 255), (92, 40, 75, 255), (199, 57, 73, 255)),
         "drowned": ((8, 26, 45, 255), (20, 55, 72, 255), (42, 104, 117, 255), (110, 160, 150, 255)),
     }
+    width, height = 512, 288
     for name, (top, mid, ridge, glow) in specs.items():
-        width, height = 512, 288
         img = canvas(width, height)
         for y in range(height):
             t = y / height
@@ -297,24 +318,128 @@ def make_backgrounds():
             for x in range(width):
                 put(img, x, y, blend)
         rng = random.Random(name)
-        # Dust motes, distant stars, and faint telemetry-like points.
+        # Keep the same cold starfield and eclipsed body as a system-wide visual anchor.
         for _ in range(130):
             x, y = rng.randrange(width), rng.randrange(190)
-            c = (81, 151, 176, 170) if rng.random() < 0.12 else (164, 187, 198, 110)
-            put(img, x, y, c)
+            color = (81, 151, 176, 170) if rng.random() < 0.12 else (164, 187, 198, 110)
+            put(img, x, y, color)
         ellipse(img, 386, 98, 65, 65, (39, 48, 77, 255))
         ellipse(img, 386, 98, 61, 61, glow)
         ellipse(img, 386, 98, 53, 53, (53, 47, 73, 255))
         ellipse(img, 369, 98, 61, 61, top)  # a dark eclipse, not a gateway
-        for x in range(width):
-            horizon = 213 + int(11 * math.sin(x / 31.0) + 8 * math.sin(x / 13.0))
-            rect(img, x, horizon, 1, height - horizon, ridge)
-            if x % 47 == 0:
-                rect(img, x, horizon - rng.randrange(9, 28), rng.randrange(3, 8), rng.randrange(14, 30), (31, 43, 60, 255))
-        for _ in range(180):
+
+        if name == "ashlands":
+            horizons = []
+            for x in range(width):
+                horizon = 213 + int(11 * math.sin(x / 31.0) + 8 * math.sin(x / 13.0))
+                horizons.append(horizon)
+                rect(img, x, horizon, 1, height - horizon, ridge)
+            # A collapsed, nonfunctional salvage gantry is a distant scale reference.
+            iron = (25, 34, 47, 255)
+            seam = (123, 71, 66, 255)
+            base = horizons[129]
+            line(img, 91, horizons[91], 104, 165, iron)
+            line(img, 104, 165, 158, 179, iron)
+            line(img, 158, 179, 171, horizons[171], iron)
+            line(img, 104, 165, 129, base, iron)
+            line(img, 158, 179, 137, base, iron)
+            line(img, 104, 165, 171, horizons[171], iron)
+            line(img, 104, 173, 158, 187, seam)
+            line(img, 116, 168, 115, 184, iron)
+            line(img, 148, 177, 145, 193, iron)
+            # Silt has covered the feet; only a few seams still catch the eclipse.
+            for x in (107, 121, 145, 160):
+                rect(img, x, horizons[x] - 2, 7, 2, (143, 83, 65, 255))
+            for x in range(12, width, 31):
+                y = horizons[x] + 12 + rng.randrange(2, 11)
+                line(img, x, y, x + rng.randrange(4, 10), y - 1, (132, 72, 65, 255))
+
+        elif name == "glassfall":
+            horizons = []
+            for x in range(width):
+                horizon = 219 + int(4 * math.sin(x / 29.0) + 3 * math.sin(x / 11.0))
+                horizons.append(horizon)
+                rect(img, x, horizon, 1, height - horizon, ridge)
+            deep_glass = (48, 33, 63, 255)
+            mid_glass = (79, 39, 75, 255)
+            # The far crust is a broken mineral skyline, not the rolling ash hills.
+            polygon(
+                img,
+                [(0, 224), (0, 216), (33, 209), (59, 217), (82, 158), (103, 218),
+                 (145, 220), (176, 187), (205, 221), (245, 216), (278, 128),
+                 (319, 220), (354, 212), (389, 173), (412, 218), (452, 204),
+                 (478, 215), (512, 205), (512, 288), (0, 288)],
+                deep_glass,
+            )
+            polygon(img, [(81, 217), (82, 158), (103, 218)], mid_glass)
+            polygon(img, [(278, 217), (278, 128), (319, 220)], mid_glass)
+            polygon(img, [(388, 217), (389, 173), (412, 218)], mid_glass)
+            # Thin fractured edges only; no luminous portal or magical geometry.
+            line(img, 82, 158, 101, 207, (151, 62, 92, 255))
+            line(img, 278, 128, 314, 203, (177, 63, 91, 255))
+            line(img, 389, 173, 409, 208, (141, 58, 91, 255))
+            line(img, 173, 242, 207, 231, (142, 58, 85, 255))
+            line(img, 207, 231, 223, 240, (142, 58, 85, 255))
+            line(img, 223, 240, 256, 228, (142, 58, 85, 255))
+            for x in (80, 177, 278, 389, 476):
+                y = horizons[x] + 8
+                line(img, x, y, x + 6, y - 2, glow if x == 278 else (129, 59, 88, 255))
+
+        else:
+            # Water flattens the horizon; the structures are mostly below its line.
+            waterline = 222
+            rect(img, 0, waterline, width, height - waterline, ridge)
+            polygon(
+                img,
+                [(0, 224), (0, 213), (36, 210), (74, 217), (112, 211), (150, 216),
+                 (184, 211), (226, 218), (260, 209), (299, 215), (337, 210),
+                 (374, 216), (413, 208), (450, 216), (480, 211), (512, 215),
+                 (512, 288), (0, 288)],
+                (18, 49, 67, 255),
+            )
+            pole = (38, 65, 74, 255)
+            hull = (31, 58, 69, 255)
+            dim_light = (101, 159, 157, 220)
+            # Survey pylons and a broken hull interrupt the empty flood horizon.
+            line(img, 90, 256, 95, 164, pole)
+            line(img, 94, 256, 99, 166, pole)
+            line(img, 95, 164, 110, 177, pole)
+            line(img, 87, 187, 105, 188, pole)
+            line(img, 91, 205, 109, 213, pole)
+            rect(img, 92, 170, 8, 4, dim_light)
+            rect(img, 87, 190, 3, 3, (179, 112, 84, 230))
+            line(img, 264, 257, 264, 181, pole)
+            line(img, 268, 257, 268, 184, pole)
+            line(img, 266, 190, 239, 198, pole)
+            line(img, 266, 196, 290, 207, pole)
+            line(img, 239, 198, 233, 219, pole)
+            line(img, 290, 207, 296, 222, pole)
+            rect(img, 262, 185, 9, 3, dim_light)
+            polygon(img, [(151, 239), (166, 231), (181, 229), (200, 232), (215, 230),
+                          (244, 239), (237, 244), (220, 248), (176, 247), (163, 245)], hull)
+            line(img, 166, 231, 183, 225, pole)
+            line(img, 183, 225, 205, 226, pole)
+            line(img, 205, 226, 215, 230, pole)
+            line(img, 197, 232, 204, 219, pole)
+            rect(img, 179, 236, 4, 2, dim_light)
+            rect(img, 210, 236, 4, 2, dim_light)
+            # Broken reflections are horizontal and intermittent, never a complete mirror.
+            for y, x0, length in ((228, 351, 38), (235, 388, 27), (244, 366, 46),
+                                  (255, 403, 23), (268, 379, 35)):
+                rect(img, x0, y, length, 1, (79, 139, 142, 128))
+            for _ in range(54):
+                x = rng.randrange(width)
+                y = rng.randrange(waterline + 5, height - 2)
+                if rng.random() < 0.68:
+                    line(img, x, y, min(width - 1, x + rng.randrange(3, 12)), y,
+                         (78, 133, 139, 100))
+
+        for _ in range(95):
             x, y = rng.randrange(width), rng.randrange(220, height)
-            if img[y][x][3] != 0:
-                put(img, x, y, glow if rng.random() < 0.15 else (52, 52, 68, 255))
+            if rng.random() < 0.15:
+                put(img, x, y, glow)
+            elif name != "drowned":
+                put(img, x, y, (52, 52, 68, 255))
         save_png(ROOT / f"assets/environments/{name}_parallax.png", img)
 
 

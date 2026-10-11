@@ -6,7 +6,7 @@ The generator writes:
 
 - a 16-pixel terrain atlas with distinct geological and construction tiles;
 - original rover animation frames, two survivor portraits, a crystalline scavenger and an Administration security drone;
-- a side-view salvage vessel and three biome-specific parallax backgrounds;
+- a side-view salvage vessel and three biome-specific parallax backgrounds. They share an eclipsed-body sky anchor, but show separate environmental evidence: an ash-buried salvage gantry, a broken volcanic-glass skyline and half-submerged survey pylons with hull debris. These are non-canon simulation inventions, not named catastrophe sites or gateways;
 - a compact item icon atlas and SilkBound launcher icon;
 - synthesized mono WAV ambience and short movement, impact, warning, pickup, crafting and tool cues.
 

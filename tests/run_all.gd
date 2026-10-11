@@ -343,6 +343,27 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		not bool(game.call("is_action_held", "jump")), "touch release clears its own held action"
 	)
+	game.call("_scan")
+	var scanned_sites: Array = game.get("discoveries")
+	_check(scanned_sites.has("ashlands"), "first scan stores the Ashlands field record")
+	_check(
+		hud.message_label.text.contains("FIELD RECORD STORED"),
+		"first scan confirms that a new record was indexed"
+	)
+	game.call("_scan")
+	_check(
+		not hud.message_label.text.contains("FIELD RECORD STORED"),
+		"repeat scans do not claim a new discovery"
+	)
+	var touch_hotbar: Control = hud.root.get_node("TouchHotbar")
+	_check(
+		hud.message_label.offset_bottom <= touch_hotbar.offset_top,
+		"field messages stay clear of the touch hotbar"
+	)
+	_check(
+		hud.message_label.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART,
+		"long scanner returns wrap instead of being clipped"
+	)
 	game.set("current_storage_kind", "planet")
 	hud.show_storage({}, "PLANET CACHE")
 	hud.refresh_current_panel()
@@ -351,6 +372,25 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		hud._panel_kind == "compendium", "touch-accessible menu action opens the field compendium"
 	)
+	var ashlands_record_button: Button = null
+	for row in hud.modal_rows.get_children():
+		if row is Button and row.text.contains("SIMULATION RECORD — Ashlands"):
+			ashlands_record_button = row as Button
+	_check(
+		ashlands_record_button != null, "the newly scanned world appears in the field compendium"
+	)
+	if ashlands_record_button != null:
+		_check(
+			ashlands_record_button.text.contains("gantry"),
+			"the field record describes its world-specific environmental evidence"
+		)
+		_check(
+			(
+				ashlands_record_button.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART
+				and ashlands_record_button.custom_minimum_size.y >= 80.0
+			),
+			"long field records wrap and reserve room for their evidence text"
+		)
 	hud.action_requested.emit("close")
 	game.queue_free()
 	await process_frame

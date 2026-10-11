@@ -286,19 +286,19 @@ const DISCOVERIES := {
 	{
 		"label": "SIMULATION RECORD — Ashlands",
 		"text":
-		"An invented industrial ruin with accessible salvage, shallow ferrite and a bounded ash-storm exposure hazard."
+		"The collapsed horizon gantry appears older than the salvage vessel; no crew ID or date survived. Ferrite and hull scrap cluster along a shallow shelf. This is an invented survey site, not a named canon location."
 	},
 	"glassfall":
 	{
 		"label": "SIMULATION RECORD — Glassfall",
 		"text":
-		"An invented glass-rich survey world. Its localized terrain changes model Drakken terraforming pressure; this is not a named historical catastrophe site."
+		"The distant shards read as a volcanic-glass ridge, not a structure. A local shear can overwrite a route and remain after travel. This generated pressure event is not a named catastrophe site."
 	},
 	"drowned":
 	{
 		"label": "SIMULATION RECORD — Drowned Remnant",
 		"text":
-		"An invented flooded ruin field with waterlogged passages, archival hardware and a conventional oxygen hazard."
+		"Survey pylons and torn hull break the waterline; waterlogged passages hold inert archive hardware, not a surviving mind. This invented ruin field has an ordinary oxygen hazard. No named catastrophe is implied."
 	}
 }
 
