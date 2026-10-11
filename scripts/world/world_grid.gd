@@ -113,6 +113,49 @@ func get_tile_world(point: Vector2) -> int:
 	return get_tile(cell.x, cell.y)
 
 
+func captain_space_clear(point: Vector2) -> bool:
+	# Bounds for the existing 18x38 character capsule. Inspect saved tiles,
+	# including constructed walls; do not change the generated terrain.
+	if not point.is_finite():
+		return false
+	var low := world_to_cell(point - Vector2(10.0, 18.0))
+	var high := world_to_cell(point + Vector2(10.0, 18.0))
+	for y in range(low.y, high.y + 1):
+		for x in range(low.x, high.x + 1):
+			if Tiles.is_solid(get_tile(x, y)):
+				return false
+	return true
+
+
+func safe_reentry_position(preferred: Vector2, fallback: Vector2) -> Vector2:
+	if captain_space_clear(preferred):
+		return preferred
+	# Recheck the actual modified landscape; prefer the same neighborhood
+	# and fall back to a near-ship shelf only if local ground is obstructed.
+	for raw_anchor in [preferred, fallback]:
+		var anchor: Vector2 = raw_anchor
+		if not anchor.is_finite():
+			continue
+		var origin_x := world_to_cell(anchor).x
+		for radius in range(16):
+			var candidates: Array[int] = [origin_x]
+			if radius > 0:
+				candidates = [origin_x - radius, origin_x + radius]
+			for x in candidates:
+				if x < 1 or x >= world_width - 1:
+					continue
+				var ground_y := surface_at(x)
+				if not Tiles.is_solid(get_tile(x, ground_y)):
+					continue
+				for rise in range(2, 6):
+					var candidate := cell_to_world(Vector2i(x, ground_y - rise))
+					if captain_space_clear(candidate):
+						return candidate
+	if captain_space_clear(fallback):
+		return fallback
+	return preferred
+
+
 func set_tile(x: int, y: int, tile_id: int) -> bool:
 	if x < 0 or x >= world_width or y < 0 or y >= world_height:
 		return false

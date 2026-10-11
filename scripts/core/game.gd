@@ -64,6 +64,7 @@ var _last_action_was_touch := false
 var _scan_highlight_clock := 0.0
 var _survivor_prompt_clock := 0.0
 var _respawn_choice_open := false
+var _spawn_adjusted := false
 
 
 func _ready() -> void:
@@ -94,7 +95,11 @@ func _ready() -> void:
 		(
 			hud
 			. show_message(
-				"A damaged civilian vessel. No safe Starsilk handling. Keep the ship—and other people—alive.",
+				(
+					"SAVED POSITION OBSTRUCTED · returned to nearby stable ground."
+					if _spawn_adjusted
+					else "A damaged civilian vessel. No safe Starsilk handling. Keep the ship—and other people—alive."
+				),
 				7.0
 			)
 		)
@@ -510,6 +515,11 @@ func _mount_planet(planet_id: String) -> void:
 					clampf(saved_x, 0.0, world.world_width * TILE_SIZE),
 					clampf(saved_y, 0.0, world.world_height * TILE_SIZE)
 				)
+	var safe_position := world.safe_reentry_position(
+		spawn_position, world.cell_to_world(world.spawn_cell)
+	)
+	_spawn_adjusted = safe_position.distance_to(spawn_position) > 0.5
+	spawn_position = safe_position
 	if player == null or not is_instance_valid(player):
 		player = PlayerScene.instantiate() as SilkboundPlayer
 		player.name = "FieldCaptain"
@@ -533,6 +543,8 @@ func _mount_planet(planet_id: String) -> void:
 				"The local scanner flagged a shifting fault. Record the transformed route after pressure peaks."
 			)
 		)
+	if _spawn_adjusted and is_instance_valid(hud):
+		hud.show_message("SAVED POSITION OBSTRUCTED · returned to nearby stable ground.", 4.5)
 	_start_ambience()
 	queue_redraw()
 

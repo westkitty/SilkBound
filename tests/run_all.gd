@@ -31,6 +31,7 @@ func _run() -> void:
 	await _test_released_touch_outside_controls()
 	_test_survival_damage_timing()
 	await _test_environment_cache_invalidation()
+	await _test_safe_reentry_placement()
 	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
 	_test_versioned_save_round_trip()
@@ -213,6 +214,36 @@ func _test_survival_damage_timing() -> void:
 		is_equal_approx(stalled.health, stepped.health) and stalled.health == 80.0,
 		"damage interval remainder survives across frame boundaries"
 	)
+
+
+func _test_safe_reentry_placement() -> void:
+	var rescue_world := WorldGrid.new()
+	root.add_child(rescue_world)
+	rescue_world.setup("reentry-contract", 91142, Generator.Biome.GLASSFALL)
+	var buried_column := 70
+	var buried := rescue_world.cell_to_world(
+		Vector2i(buried_column, rescue_world.surface_at(buried_column) + 4)
+	)
+	var fallback := rescue_world.cell_to_world(rescue_world.spawn_cell)
+	_check(not rescue_world.captain_space_clear(buried), "buried save location is unsafe")
+	var landed := rescue_world.safe_reentry_position(buried, fallback)
+	_check(rescue_world.captain_space_clear(landed), "reentry finds unobstructed space")
+	_check(
+		absi(rescue_world.world_to_cell(landed).x - buried_column) <= 15,
+		"reentry prefers nearby existing surface instead of distant ship landing"
+	)
+	_check(
+		rescue_world.safe_reentry_position(fallback, buried) == fallback,
+		"valid stored landing coordinates are not moved"
+	)
+	var original_edits := rescue_world.modifications.duplicate(true)
+	rescue_world.safe_reentry_position(buried, fallback)
+	_check(
+		rescue_world.modifications == original_edits,
+		"landing recovery never constructs or erases terrain"
+	)
+	rescue_world.queue_free()
+	await process_frame
 
 
 func _test_environment_cache_invalidation() -> void:
@@ -690,9 +721,30 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 		"paused input also clears the actual virtual-stick ownership"
 	)
 	game.set("is_paused", false)
+	var glass_seed := Travel.planet_seed(int(game.get("base_seed")), "glassfall")
+	var glass_geometry := Generator.generate(glass_seed, Generator.Biome.GLASSFALL)
+	var blocked_column := WorldGrid.GLASSFALL_FAULT_X
+	var blocked_y := int(glass_geometry["surface"][blocked_column]) + 4
+	var blocked_position := Vector2(
+		(float(blocked_column) + 0.5) * 32.0, (float(blocked_y) + 0.5) * 32.0
+	)
+	var saved_states: Dictionary = game.get("world_states")
+	saved_states["glassfall"] = {
+		"player_position": [blocked_position.x, blocked_position.y]
+	}
+	game.set("world_states", saved_states)
 	game.call("_mount_planet", "glassfall")
 	var field_world: WorldGrid = game.get("world")
 	var field_player: SilkboundPlayer = game.get("player")
+	_check(
+		field_world.captain_space_clear(field_player.global_position)
+		and field_player.global_position != blocked_position,
+		"mounting saved terrain repairs a buried captain before physics resumes"
+	)
+	_check(
+		bool(game.get("_spawn_adjusted")),
+		"reentry recovery is surfaced as a visible navigation correction"
+	)
 	var survey_cell := Vector2i(
 		WorldGrid.GLASSFALL_FAULT_X,
 		field_world.surface_at(WorldGrid.GLASSFALL_FAULT_X) - 2
