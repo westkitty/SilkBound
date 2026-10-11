@@ -10,6 +10,11 @@ const Items = preload("res://scripts/inventory/item_catalog.gd")
 const ItemIcons = preload("res://assets/ui/item_icons.png")
 const ActionButton = preload("res://scripts/ui/touch_action_button.gd")
 const Stick = preload("res://scripts/ui/virtual_stick.gd")
+const MESSAGE_SAFE_BOTTOM := 76.0
+const MESSAGE_MIN_HEIGHT := 50.0
+const MESSAGE_MAX_HEIGHT := 134.0
+const MESSAGE_CHARS_PER_LINE := 64.0
+const MESSAGE_LINE_HEIGHT := 21.0
 
 var game: Node
 var root: Control
@@ -87,6 +92,14 @@ func refresh() -> void:
 
 func show_message(text: String, seconds: float = 3.0) -> void:
 	message_label.text = text
+	var estimated_lines := 0
+	for text_line in text.split("\n"):
+		estimated_lines += maxi(1, ceili(float(text_line.length()) / MESSAGE_CHARS_PER_LINE))
+	var estimated_height := clampf(
+		float(estimated_lines) * MESSAGE_LINE_HEIGHT + 8.0, MESSAGE_MIN_HEIGHT, MESSAGE_MAX_HEIGHT
+	)
+	message_label.offset_bottom = -MESSAGE_SAFE_BOTTOM
+	message_label.offset_top = -(MESSAGE_SAFE_BOTTOM + estimated_height)
 	message_label.visible = true
 	message_timer = seconds
 
@@ -414,8 +427,8 @@ func _build_layout() -> void:
 	message_label.anchor_bottom = 1.0
 	message_label.offset_left = -340
 	message_label.offset_right = 340
-	message_label.offset_top = -126
-	message_label.offset_bottom = -76
+	message_label.offset_top = -(MESSAGE_SAFE_BOTTOM + MESSAGE_MIN_HEIGHT)
+	message_label.offset_bottom = -MESSAGE_SAFE_BOTTOM
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message_label.visible = false
 	message_label.mouse_filter = Control.MOUSE_FILTER_IGNORE

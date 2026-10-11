@@ -1139,9 +1139,11 @@ func _scan() -> void:
 	if first_record:
 		discoveries.append(current_planet_id)
 	var summary_parts: Array[String] = []
-	for key in ["ore", "wreckage", "archive", "fiber", "water", "fault"]:
+	for key in [
+		"ferrite", "copper", "crystal", "glass", "wreckage", "archive", "fiber", "water", "fault"
+	]:
 		if int(result[key]) > 0:
-			summary_parts.append("%s %d" % [String(key).to_upper(), int(result[key])])
+			summary_parts.append("%s %d CELLS" % [String(key).to_upper(), int(result[key])])
 	if current_planet_id == "glassfall" and terraformer.phase < 3:
 		summary_parts.append("PRESSURE %s" % terraformer.phase_name())
 	if current_planet_id == "glassfall" and terraformer.transformed and int(result["fault"]) > 0:

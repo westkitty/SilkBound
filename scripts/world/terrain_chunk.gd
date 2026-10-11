@@ -4,6 +4,16 @@ const Tiles = preload("res://scripts/world/tile_catalog.gd")
 const TILE_SIZE := 32
 const ATLAS_COLUMNS := 8
 const TEXTURE := preload("res://assets/tiles/terrain_atlas.png")
+const SCAN_COLORS := {
+	"ferrite": Color(0.19, 0.84, 0.91, 0.82),
+	"copper": Color(1.0, 0.63, 0.32, 0.88),
+	"crystal": Color(0.72, 0.86, 1.0, 0.9),
+	"wreckage": Color(1.0, 0.78, 0.38, 0.9),
+	"glass": Color(1.0, 0.42, 0.67, 0.88),
+	"archive": Color(0.48, 1.0, 0.82, 0.9),
+	"fiber": Color(0.7, 0.95, 0.46, 0.9),
+	"fault": Color(1.0, 0.28, 0.42, 0.95)
+}
 
 var grid: Object
 var chunk_index: int = 0
@@ -57,5 +67,7 @@ func _draw() -> void:
 					shade,
 					2.0
 				)
-			if highlights.has(str(cell_index)):
-				draw_rect(destination.grow(-3.0), Color(0.19, 0.84, 0.91, 0.72), false, 2.0)
+			var scan_category := String(highlights.get(str(cell_index), ""))
+			if SCAN_COLORS.has(scan_category):
+				var scan_color: Color = SCAN_COLORS[scan_category]
+				draw_rect(destination.grow(-3.0), scan_color, false, 2.0)

@@ -193,7 +193,16 @@ func apply_terraform(center_x: int, radius: int = 6) -> Dictionary:
 func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 	var origin := world_to_cell(center)
 	var counts := {
-		"ore": 0, "wreckage": 0, "water": 0, "glass": 0, "archive": 0, "fiber": 0, "fault": 0
+		"ore": 0,
+		"ferrite": 0,
+		"copper": 0,
+		"crystal": 0,
+		"wreckage": 0,
+		"water": 0,
+		"glass": 0,
+		"archive": 0,
+		"fiber": 0,
+		"fault": 0
 	}
 	scan_highlights.clear()
 	for y in range(
@@ -207,8 +216,12 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 			var tile_id := get_tile(x, y)
 			var category := ""
 			match tile_id:
-				Tiles.Tile.FERRITE, Tiles.Tile.COPPER, Tiles.Tile.CRYSTAL:
-					category = "ore"
+				Tiles.Tile.FERRITE:
+					category = "ferrite"
+				Tiles.Tile.COPPER:
+					category = "copper"
+				Tiles.Tile.CRYSTAL:
+					category = "crystal"
 				Tiles.Tile.SCRAP:
 					category = "wreckage"
 				Tiles.Tile.WATER:
@@ -221,10 +234,18 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 					category = "fiber"
 				Tiles.Tile.FAULT:
 					category = "fault"
-			if not category.is_empty():
-				counts[category] = int(counts[category]) + 1
-				if category in ["ore", "wreckage", "archive", "fault"]:
-					scan_highlights[str(cell_index(x, y))] = true
+			if category.is_empty():
+				continue
+			counts[category] = int(counts[category]) + 1
+			if category in ["ferrite", "copper", "crystal"]:
+				counts["ore"] = int(counts["ore"]) + 1
+			if (
+				category
+				in [
+					"ferrite", "copper", "crystal", "wreckage", "glass", "archive", "fiber", "fault"
+				]
+			):
+				scan_highlights[str(cell_index(x, y))] = category
 	for chunk in chunk_views.values():
 		(chunk as CanvasItem).queue_redraw()
 	return counts

@@ -2,6 +2,7 @@ extends SceneTree
 
 const Generator = preload("res://scripts/world/planet_generator.gd")
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
+const TerrainChunk = preload("res://scripts/world/terrain_chunk.gd")
 const TestInventory = preload("res://scripts/inventory/inventory.gd")
 const Crafting = preload("res://scripts/inventory/crafting.gd")
 const Travel = preload("res://scripts/travel/travel_system.gd")
@@ -25,6 +26,7 @@ func _run() -> void:
 	_test_combat_rules()
 	_test_quest_state()
 	_test_touch_pointer_isolation()
+	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
 	_test_versioned_save_round_trip()
 	await _test_main_scene_startup_and_touch_signals()
@@ -204,6 +206,61 @@ func _test_touch_pointer_isolation() -> void:
 	_check(router.release("move_left", 11), "movement ends when its own pointer releases")
 
 
+func _test_scanner_resource_coverage() -> void:
+	var scan_world := WorldGrid.new()
+	root.add_child(scan_world)
+	scan_world.setup("scan-coverage", 773421, Generator.Biome.ASHLANDS)
+	var origin := Vector2i(80, 10)
+	var sample_cells := {
+		"ferrite": {"offset": Vector2i.ZERO, "tile": Tiles.Tile.FERRITE},
+		"copper": {"offset": Vector2i(1, 0), "tile": Tiles.Tile.COPPER},
+		"crystal": {"offset": Vector2i(0, 1), "tile": Tiles.Tile.CRYSTAL},
+		"glass": {"offset": Vector2i(-1, 0), "tile": Tiles.Tile.GLASS},
+		"wreckage": {"offset": Vector2i(0, -1), "tile": Tiles.Tile.SCRAP},
+		"water": {"offset": Vector2i(2, 0), "tile": Tiles.Tile.WATER},
+		"archive": {"offset": Vector2i(-2, 0), "tile": Tiles.Tile.ARCHIVE},
+		"fiber": {"offset": Vector2i(0, 2), "tile": Tiles.Tile.FIBER},
+		"fault": {"offset": Vector2i(0, -2), "tile": Tiles.Tile.FAULT}
+	}
+	for category in sample_cells:
+		var sample: Dictionary = sample_cells[category]
+		var offset: Vector2i = sample["offset"]
+		scan_world.set_tile(origin.x + offset.x, origin.y + offset.y, int(sample["tile"]))
+	var result := scan_world.scan_area(scan_world.cell_to_world(origin), 4)
+	for category in sample_cells:
+		_check(
+			int(result[category]) == 1,
+			"scanner reports a distinct %s cell count" % String(category)
+		)
+	_check(
+		int(result["ore"]) == 3, "legacy ore total remains the sum of ferrite, copper and crystal"
+	)
+	for category in [
+		"ferrite", "copper", "crystal", "glass", "wreckage", "archive", "fiber", "fault"
+	]:
+		var sample: Dictionary = sample_cells[category]
+		var offset: Vector2i = sample["offset"]
+		var cell_key := str(scan_world.cell_index(origin.x + offset.x, origin.y + offset.y))
+		_check(
+			String(scan_world.scan_highlights.get(cell_key, "")) == category,
+			"scan marker preserves the %s material identity for its visual treatment" % category
+		)
+		_check(
+			TerrainChunk.SCAN_COLORS.has(category),
+			"%s has a dedicated on-world scan color" % category
+		)
+	var water_offset: Vector2i = sample_cells["water"]["offset"]
+	var water_key := str(
+		scan_world.cell_index(origin.x + water_offset.x, origin.y + water_offset.y)
+	)
+	_check(
+		not scan_world.scan_highlights.has(water_key),
+		"water remains visible without dense scan outlines"
+	)
+	scan_world.queue_free()
+	await process_frame
+
+
 func _test_world_changes_and_terraforming() -> void:
 	var world := WorldGrid.new()
 	root.add_child(world)
@@ -343,12 +400,54 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		not bool(game.call("is_action_held", "jump")), "touch release clears its own held action"
 	)
+	var scan_world: WorldGrid = game.get("world")
+	var scan_player: CharacterBody2D = game.get("player")
+	var scan_origin := scan_world.world_to_cell(scan_player.global_position)
+	var scan_samples := [
+		{"offset": Vector2i(2, -1), "tile": Tiles.Tile.GLASS},
+		{"offset": Vector2i(3, -1), "tile": Tiles.Tile.FERRITE},
+		{"offset": Vector2i(3, 0), "tile": Tiles.Tile.COPPER},
+		{"offset": Vector2i(1, -2), "tile": Tiles.Tile.CRYSTAL},
+		{"offset": Vector2i(-2, -1), "tile": Tiles.Tile.FIBER},
+		{"offset": Vector2i(-1, 2), "tile": Tiles.Tile.ARCHIVE},
+		{"offset": Vector2i(-2, 2), "tile": Tiles.Tile.FAULT},
+		{"offset": Vector2i(4, 2), "tile": Tiles.Tile.WATER}
+	]
+	var glass_cell := Vector2i(-1, -1)
+	for sample in scan_samples:
+		var offset: Vector2i = sample["offset"]
+		var cell := scan_origin + offset
+		scan_world.set_tile(cell.x, cell.y, int(sample["tile"]))
+		if int(sample["tile"]) == Tiles.Tile.GLASS:
+			glass_cell = cell
 	game.call("_scan")
 	var scanned_sites: Array = game.get("discoveries")
 	_check(scanned_sites.has("ashlands"), "first scan stores the Ashlands field record")
 	_check(
 		hud.message_label.text.contains("FIELD RECORD STORED"),
 		"first scan confirms that a new record was indexed"
+	)
+	_check(
+		(
+			hud.message_label.text.contains("GLASS 1 CELLS")
+			and hud.message_label.text.contains("FERRITE ")
+			and hud.message_label.text.contains("COPPER ")
+			and hud.message_label.text.contains("CRYSTAL 1 CELLS")
+		),
+		"scanner readout identifies the exact material and nearby cell count"
+	)
+	_check(
+		(
+			scan_world.scan_highlights.has(str(scan_world.cell_index(glass_cell.x, glass_cell.y)))
+			and scan_world.scan_highlights.has(
+				str(scan_world.cell_index(scan_origin.x - 2, scan_origin.y - 1))
+			)
+		),
+		"glass and fiber resource cells receive the visible scan pulse"
+	)
+	_check(
+		hud.message_label.offset_top < -126.0,
+		"dense multi-material scan results expand above the hotbar instead of clipping"
 	)
 	game.call("_scan")
 	_check(

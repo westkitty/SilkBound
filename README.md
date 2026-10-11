@@ -32,6 +32,7 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 - **A / D** or **← / →** move; **Space / W / ↑** jump; **Shift** sprint.
 - **Left mouse** mines or places while build mode is active; **right mouse** attacks.
 - **E** interact; **Q** scan; **B** build; **I** inventory; **C** fabricate; **H** ship console; **J** field log; **M** compendium; **Esc** pause.
+- Scan pulses report nearby material-cell counts by type, color-mark mineable deposits briefly, and index a planet's simulation record on its first scan.
 
 ## Run in Godot
 
