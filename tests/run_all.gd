@@ -613,6 +613,10 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	hud.action_requested.emit("close")
 	game.call("_on_hud_touch_pressed", "mine", 903)
 	game.call("_on_hud_stick_changed", Vector2.RIGHT)
+	var action_button: TouchActionButton = hud.action_buttons[0]
+	action_button.active_pointers[73] = true
+	hud.stick._pointer_id = 73
+	hud.stick._axis = Vector2.RIGHT
 	game.set("is_paused", true)
 	game.call("_process", 0.016)
 	_check(
@@ -622,6 +626,14 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		(game.get("player") as SilkboundPlayer).touch_axis == Vector2.ZERO,
 		"pausing cannot leave virtual-stick movement latched"
+	)
+	_check(
+		action_button.active_pointers.is_empty(),
+		"paused input clears button-owned pointers as well as the action router"
+	)
+	_check(
+		hud.stick._pointer_id == -999 and hud.stick._axis == Vector2.ZERO,
+		"paused input also clears the actual virtual-stick ownership"
 	)
 	game.set("is_paused", false)
 	game.call("_mount_planet", "glassfall")

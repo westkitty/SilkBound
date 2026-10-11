@@ -16,6 +16,13 @@ func configure(action: String, text: String) -> void:
 	queue_redraw()
 
 
+func cancel_input() -> void:
+	if active_pointers.is_empty():
+		return
+	active_pointers.clear()
+	queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var pointer_id := int(event.index)

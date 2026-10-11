@@ -389,6 +389,14 @@ func refresh_current_panel() -> void:
 			show_settings()
 
 
+func cancel_live_controls() -> void:
+	for button in action_buttons:
+		if is_instance_valid(button):
+			button.cancel_input()
+	if is_instance_valid(stick):
+		stick.cancel_input()
+
+
 func apply_control_settings() -> void:
 	if game == null or root == null:
 		return

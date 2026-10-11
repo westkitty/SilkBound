@@ -227,6 +227,8 @@ func _cancel_live_input() -> void:
 	_mouse_aim_active = false
 	if is_instance_valid(player):
 		player.set_touch_axis(Vector2.ZERO)
+	if is_instance_valid(hud):
+		hud.cancel_live_controls()
 
 
 func _draw() -> void:

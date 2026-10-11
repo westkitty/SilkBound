@@ -39,6 +39,14 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
+func cancel_input() -> void:
+	if _pointer_id == -999 and not _mouse_active and _axis == Vector2.ZERO:
+		return
+	_pointer_id = -999
+	_mouse_active = false
+	_reset_axis()
+
+
 func _to_local(viewport_position: Vector2) -> Vector2:
 	return get_global_transform_with_canvas().affine_inverse() * viewport_position
 
