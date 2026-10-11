@@ -497,6 +497,36 @@ func _test_scanner_resource_coverage() -> void:
 		scan_world.scan_redraw_request_count == scan_draws + 1,
 		"repeated expiry never schedules duplicate redraws"
 	)
+	# An edge scan spans two chunks; moving away must invalidate both,
+	# while an unchanged repeat must not schedule a second redraw.
+	_check(scan_world.set_tile(95, 10, Tiles.Tile.FERRITE), "edge ore exists in first chunk")
+	_check(scan_world.set_tile(96, 10, Tiles.Tile.CRYSTAL), "edge ore exists in second chunk")
+	var before_edge := scan_world.scan_redraw_request_count
+	var edge_origin := scan_world.cell_to_world(Vector2i(95, 10))
+	var edge_returns := scan_world.scan_area(edge_origin, 4)
+	_check(
+		int(edge_returns["ferrite"]) == 1 and int(edge_returns["crystal"]) == 1,
+		"two-chunk scan preserves resource totals on both sides of chunk boundary"
+	)
+	_check(
+		scan_world.scan_redraw_request_count - before_edge == 2,
+		"edge scan redraws the two affected terrain chunks"
+	)
+	var after_edge := scan_world.scan_redraw_request_count
+	scan_world.scan_area(edge_origin, 4)
+	_check(
+		scan_world.scan_redraw_request_count == after_edge,
+		"identical edge scan retains markers without new render work"
+	)
+	scan_world.scan_area(scan_world.cell_to_world(Vector2i(160, 10)), 4)
+	_check(
+		scan_world.scan_redraw_request_count - after_edge == 2,
+		"moving scan to empty terrain clears only the two previous chunks"
+	)
+	_check(
+		scan_world.scan_highlights.is_empty(),
+		"moving a scan to a quiet region leaves no ghost resource outlines"
+	)
 	scan_world.queue_free()
 	await process_frame
 
