@@ -638,7 +638,7 @@ func _snapshot_current_world() -> void:
 	world_states[current_planet_id] = state
 
 
-func save_game() -> bool:
+func save_game(slot: String = SAVE_SLOT) -> bool:
 	if run_ended and player == null:
 		return false
 	_snapshot_current_world()
@@ -657,7 +657,7 @@ func save_game() -> bool:
 		"settings": settings.duplicate(true),
 		"run_ended": run_ended
 	}
-	var ok := SaveSystem.save_slot(data, SAVE_SLOT)
+	var ok := SaveSystem.save_slot(data, slot)
 	if ok:
 		_last_auto_save_millis = Time.get_ticks_msec()
 	return ok
@@ -1172,6 +1172,7 @@ func _scan() -> void:
 	_scan_highlight_clock = 8.0
 	play_sound("scan")
 	var first_record := not discoveries.has(current_planet_id)
+	var record_written := first_record
 	if first_record:
 		discoveries.append(current_planet_id)
 	var summary_parts: Array[String] = []
@@ -1188,6 +1189,7 @@ func _scan() -> void:
 			summary_parts.append("PRESSURE %s" % terraformer.phase_name())
 			if distance_to_shear <= range_cells and not discoveries.has("glassfall_before"):
 				discoveries.append("glassfall_before")
+				record_written = true
 				summary_parts.append("PRE-FAILURE STRATA RECORDED")
 		elif (
 			terraformer.transformed
@@ -1196,6 +1198,7 @@ func _scan() -> void:
 			and not discoveries.has("glassfall_after")
 		):
 			discoveries.append("glassfall_after")
+			record_written = true
 			summary_parts.append("POST-FAILURE STRATA RECORDED")
 	if current_planet_id == "glassfall" and terraformer.transformed and int(result["fault"]) > 0:
 		quest_system.activate(
@@ -1214,6 +1217,7 @@ func _scan() -> void:
 				)
 			)
 			_add_item_or_drop("crystal", 2, player.global_position)
+			record_written = true
 			summary_parts.append("FAULT ROUTE LOGGED")
 	if summary_parts.is_empty():
 		summary_parts.append("NO LOCAL RESOURCE RETURNS")
@@ -1221,6 +1225,8 @@ func _scan() -> void:
 		summary_parts.append("FIELD RECORD STORED")
 	hud.show_message("SCAN  /  " + "   ·   ".join(PackedStringArray(summary_parts)), 3.8)
 	hud.refresh()
+	if record_written and not test_mode:
+		save_game()
 
 
 func _use_consumable(item_id: String) -> void:
