@@ -1,0 +1,198 @@
+name: Android debug APK
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-export:
+    name: Validate Godot project and export arm64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: "4.7.2"
+      GODOT_EDITOR_SHA256: "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4"
+      GODOT_TEMPLATES_SHA256: "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011"
+      ANDROID_API_LEVEL: "36"
+      ANDROID_BUILD_TOOLS: "36.0.0"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+
+      - name: Test expected Godot diagnostic filtering
+        shell: bash
+        run: bash tests/test_validate_project.sh
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4.0.4
+
+      - name: Install Android export SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}"
+          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+
+      - name: Install pinned Godot editor and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'echo "::error file=.github/workflows/android.yml,line=60::Godot install failed at: ${BASH_COMMAND}"' ERR
+          install_root="$RUNNER_TEMP/silkbound-godot"
+          mkdir -p "$install_root/editor" "$install_root/templates"
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
+            --output "$install_root/editor.zip"
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
+            --output "$install_root/templates.tpz"
+          editor_digest="$(sha256sum "$install_root/editor.zip" | awk '{print $1}')"
+          echo "::notice title=Godot editor SHA-256::$editor_digest"
+          if [[ "$editor_digest" != "$GODOT_EDITOR_SHA256" ]]; then
+            echo "::error file=.github/workflows/android.yml,line=60::Godot editor checksum mismatch (actual $editor_digest)."
+            exit 1
+          fi
+          templates_digest="$(sha256sum "$install_root/templates.tpz" | awk '{print $1}')"
+          echo "::notice title=Godot templates SHA-256::$templates_digest"
+          if [[ "$templates_digest" != "$GODOT_TEMPLATES_SHA256" ]]; then
+            echo "::error file=.github/workflows/android.yml,line=60::Godot templates checksum mismatch (actual $templates_digest)."
+            exit 1
+          fi
+          unzip -q "$install_root/editor.zip" -d "$install_root/editor"
+          unzip -q "$install_root/templates.tpz" -d "$install_root/templates"
+          godot_exe="$(find "$install_root/editor" -type f -name "Godot_v${GODOT_VERSION}-stable_linux.x86_64*" -print -quit)"
+          if [[ -z "$godot_exe" ]]; then
+            archive_files="$(find "$install_root/editor" -type f -printf '%P, ' | cut -c1-300)"
+            echo "::error file=.github/workflows/android.yml,line=60::Godot editor executable not found; extracted files: $archive_files"
+            exit 1
+          fi
+          chmod +x "$godot_exe"
+          ln -sf "$godot_exe" "$install_root/godot"
+          echo "GODOT_BIN=$install_root/godot" >> "$GITHUB_ENV"
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$template_dir"
+          find "$install_root/templates" -type f -exec cp -f {} "$template_dir/" \;
+          test -s "$template_dir/android_debug.apk"
+          test -s "$template_dir/android_release.apk"
+          "$install_root/godot" --version | tee "$install_root/version.txt"
+          grep -q "^${GODOT_VERSION}\.stable" "$install_root/version.txt"
+
+      - name: Import project resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          import_status=0
+          "$GODOT_BIN" --headless --editor --path . --import --quit >godot-import.log 2>&1 || import_status=$?
+          cat godot-import.log
+          if [[ "$import_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-import.log; then
+            echo "::error file=project.godot::Godot import failed with exit status $import_status. Last import diagnostics follow."
+            while IFS= read -r line; do
+              echo "::error file=project.godot::$line"
+            done < <(grep -Ein -B 2 -A 4 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-import.log | tail -n 80 || true)
+            exit 1
+          fi
+
+      - name: Run deterministic gameplay tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_status=0
+          "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
+          if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error' tests/test-results.log; then
+            echo "::error file=tests/run_all.gd::GDScript tests failed with exit status $test_status. Diagnostics follow."
+            details="$(tail -n 80 tests/test-results.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error file=tests/run_all.gd::$details"
+            exit 1
+          fi
+
+      - name: Run bounded headless startup smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path . --quit-after 120 2>&1 | tee godot-smoke.log
+          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed loading resource|Invalid scene|ERROR:' godot-smoke.log; then
+            echo "The main-scene smoke test emitted a critical error." >&2
+            exit 1
+          fi
+
+      - name: Configure local Android export tool paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+          cat "$HOME/.config/godot/editor_settings-4.tres"
+
+      - name: Export Android debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          export_status=0
+          "$GODOT_BIN" --headless --path . --export-debug "Android" build/SilkBound-debug.apk 2>&1 | tee android-export.log || export_status=$?
+          if [[ "$export_status" -ne 0 ]] || [[ ! -s build/SilkBound-debug.apk ]]; then
+            echo "::error file=export_presets.cfg::Android debug export failed with exit status $export_status. Diagnostics follow."
+            details="$(tail -n 80 android-export.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error file=export_presets.cfg::$details"
+            exit 1
+          fi
+
+      - name: Validate APK package and ARM64 payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="build/SilkBound-debug.apk"
+          unzip -tq "$apk"
+          listing="$(unzip -Z1 "$apk")"
+          grep -q '^lib/arm64-v8a/' <<< "$listing"
+          grep -q '^lib/arm64-v8a/.*\.so$' <<< "$listing"
+          if grep -q '^lib/armeabi-v7a/' <<< "$listing"; then
+            echo "Unexpected 32-bit ARM library in the arm64-only APK." >&2
+            exit 1
+          fi
+          aapt="$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+          test -x "$aapt"
+          badging="$("$aapt" dump badging "$apk")"
+          grep -F "package: name='com.westkitty.silkbound'" <<< "$badging"
+          grep -F "native-code: 'arm64-v8a'" <<< "$badging"
+          printf '%s\n' "$badging" | head -n 8
+          sha256sum "$apk" | tee build/SilkBound-debug.apk.sha256
+          stat --printf='APK size: %s bytes\n' "$apk"
+
+      - name: Upload verified debug APK
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: SilkBound-Android-debug-${{ github.sha }}
+          path: |
+            build/SilkBound-debug.apk
+            build/SilkBound-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
