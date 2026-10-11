@@ -721,6 +721,9 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 		"paused input also clears the actual virtual-stick ownership"
 	)
 	game.set("is_paused", false)
+	var repaired_ship: Dictionary = game.get("ship_state")
+	repaired_ship["engine_repaired"] = true
+	game.set("ship_state", repaired_ship)
 	var glass_seed := Travel.planet_seed(int(game.get("base_seed")), "glassfall")
 	var glass_geometry := Generator.generate(glass_seed, Generator.Biome.GLASSFALL)
 	var blocked_column := WorldGrid.GLASSFALL_FAULT_X
