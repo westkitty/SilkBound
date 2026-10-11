@@ -32,6 +32,7 @@ func _run() -> void:
 	_test_survival_damage_timing()
 	await _test_environment_cache_invalidation()
 	await _test_tile_lookup_equivalence_and_benchmark()
+	await _test_visual_chunk_culling()
 	await _test_safe_reentry_placement()
 	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
@@ -244,6 +245,38 @@ func _test_safe_reentry_placement() -> void:
 		"landing recovery never constructs or erases terrain"
 	)
 	rescue_world.queue_free()
+	await process_frame
+
+
+func _test_visual_chunk_culling() -> void:
+	var cull_world := WorldGrid.new()
+	root.add_child(cull_world)
+	cull_world.setup("cull-test", 553812, Generator.Biome.ASHLANDS)
+	var total := cull_world.chunk_views.size()
+	var collisions := cull_world.collision_chunks.size()
+	cull_world.update_visible_chunks(10.0 * 32.0, 1280.0)
+	var nearby := 0
+	for chunk in cull_world.chunk_views.values():
+		if (chunk as CanvasItem).visible:
+			nearby += 1
+	_check(
+		total == 9 and nearby > 0 and nearby <= 4,
+		"1280px landscape view keeps a bounded set of terrain chunks visible"
+	)
+	print("SILKBOUND PERF chunk_visibility all=%d visible=%d" % [total, nearby])
+	var first_chunk: CanvasItem = cull_world.chunk_views[0]
+	var final_chunk: CanvasItem = cull_world.chunk_views[total - 1]
+	_check(first_chunk.visible and not final_chunk.visible, "far chunks are hidden near ship")
+	cull_world.update_visible_chunks(float(cull_world.world_width * WorldGrid.TILE_SIZE - 300), 1280.0)
+	_check(
+		not first_chunk.visible and final_chunk.visible,
+		"camera travel reveals destination chunks and hides the departed edge"
+	)
+	_check(
+		cull_world.collision_chunks.size() == collisions,
+		"visual culling never disables world collision"
+	)
+	cull_world.queue_free()
 	await process_frame
 
 

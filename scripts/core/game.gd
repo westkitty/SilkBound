@@ -113,6 +113,9 @@ func _process(delta: float) -> void:
 		return
 	if world == null or player == null:
 		return
+	world.update_visible_chunks(
+		player.global_position.x, get_viewport_rect().size.x / maxf(0.1, player.camera.zoom.x)
+	)
 	_autosave_clock += delta
 	if _autosave_clock >= 40.0:
 		_autosave_clock = 0.0
@@ -530,6 +533,9 @@ func _mount_planet(planet_id: String) -> void:
 		player.bind_world(world, spawn_position)
 	if run_ended:
 		player.alive = false
+	world.update_visible_chunks(
+		spawn_position.x, get_viewport_rect().size.x / maxf(0.1, player.camera.zoom.x)
+	)
 	_add_ship_visual()
 	_terraformer_for_planet(state)
 	_restore_saved_pickups(state)

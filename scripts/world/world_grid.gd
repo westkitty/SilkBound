@@ -23,6 +23,8 @@ var cracks: Dictionary = {}
 var scan_highlights: Dictionary = {}
 var _scan_highlight_chunks: Dictionary = {}
 var scan_redraw_request_count := 0
+var _visible_first_chunk := -1
+var _visible_last_chunk := -1
 var chunk_views: Dictionary = {}
 var collision_chunks: Dictionary = {}
 var spawn_cell := Vector2i(10, 20)
@@ -457,6 +459,25 @@ func _refresh_dirty_chunks() -> void:
 	_dirty_chunks.clear()
 
 
+func update_visible_chunks(camera_x: float, viewport_world_width: float) -> void:
+	# Keep a full chunk of camera-smoothing margin on both sides.
+	# Collision chunks remain active; only distant artwork is hidden.
+	if chunk_views.is_empty() or not is_finite(camera_x):
+		return
+	var chunk_span := float(CHUNK_WIDTH * TILE_SIZE)
+	var half_view := maxf(0.0, viewport_world_width) * 0.5 + chunk_span
+	var first := clampi(floori((camera_x - half_view) / chunk_span), 0, chunk_views.size() - 1)
+	var last := clampi(floori((camera_x + half_view) / chunk_span), first, chunk_views.size() - 1)
+	if first == _visible_first_chunk and last == _visible_last_chunk:
+		return
+	_visible_first_chunk = first
+	_visible_last_chunk = last
+	for raw_index in chunk_views.keys():
+		var index := int(raw_index)
+		var chunk: CanvasItem = chunk_views[raw_index]
+		chunk.visible = index >= first and index <= last
+
+
 func _refresh_chunk(chunk_index: int) -> void:
 	if chunk_views.has(chunk_index):
 		(chunk_views[chunk_index] as CanvasItem).queue_redraw()
@@ -494,6 +515,8 @@ func _refresh_chunk(chunk_index: int) -> void:
 
 
 func _build_chunks() -> void:
+	_visible_first_chunk = -1
+	_visible_last_chunk = -1
 	for node in chunk_views.values():
 		if is_instance_valid(node):
 			node.queue_free()
