@@ -677,5 +677,18 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 		and Items.DISCOVERIES.has("glassfall_after"),
 		"both Glassfall states have separately readable compendium records"
 	)
+	_check(
+		bool(game.call("save_game", "test_discovery_contract")),
+		"changed geology and field evidence write to an isolated test slot"
+	)
+	var recorded_save := Save.load_slot("test_discovery_contract")
+	_check(
+		bool(recorded_save.get("ok", false))
+		and recorded_save["data"]["discoveries"].has("glassfall_before")
+		and recorded_save["data"]["discoveries"].has("glassfall_after")
+		and not Dictionary(recorded_save["data"]["world_states"]["glassfall"]["edits"]).is_empty(),
+		"survey records and persistent terrain edits survive a save round trip"
+	)
+	Save.delete_slot("test_discovery_contract")
 	game.queue_free()
 	await process_frame
