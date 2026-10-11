@@ -264,7 +264,8 @@ func _test_environment_cache_invalidation() -> void:
 
 
 func _test_released_touch_outside_controls() -> void:
-	var touch_game := load("res://scenes/main.tscn").instantiate()
+	var touch_scene: PackedScene = load("res://scenes/main.tscn")
+	var touch_game: Node = touch_scene.instantiate()
 	touch_game.set("test_mode", true)
 	root.add_child(touch_game)
 	await process_frame
