@@ -13,6 +13,30 @@ const Quests = preload("res://scripts/quests/quest_system.gd")
 const Combat = preload("res://scripts/combat/combat_system.gd")
 const Router = preload("res://scripts/ui/touch_action_router.gd")
 
+class LegacyTileView:
+	extends RefCounted
+
+	var world_width := 0
+	var world_height := 0
+	var base_cells := PackedInt32Array()
+	var modifications: Dictionary = {}
+
+	func setup(world: WorldGrid) -> void:
+		world_width = world.world_width
+		world_height = world.world_height
+		base_cells = world.base_cells
+		modifications = world.modifications
+
+	func get_tile(x: int, y: int) -> int:
+		if x < 0 or x >= world_width or y < 0 or y >= world_height:
+			return Tiles.Tile.BASALT
+		var index := y * world_width + x
+		var key := str(index)
+		if modifications.has(key):
+			return int(modifications[key])
+		return int(base_cells[index])
+
+
 var failures := 0
 var assertions := 0
 
@@ -280,6 +304,26 @@ func _test_visual_chunk_culling() -> void:
 	await process_frame
 
 
+func _probe_legacy_tile_reads(view: LegacyTileView) -> Dictionary:
+	var checksum := 0
+	var started := Time.get_ticks_usec()
+	for iteration in range(8):
+		for y in range(8, 72):
+			for x in range(12, 220):
+				checksum += view.get_tile(x, y)
+	return {"elapsed_usec": Time.get_ticks_usec() - started, "checksum": checksum}
+
+
+func _probe_cached_tile_reads(view: WorldGrid) -> Dictionary:
+	var checksum := 0
+	var started := Time.get_ticks_usec()
+	for iteration in range(8):
+		for y in range(8, 72):
+			for x in range(12, 220):
+				checksum += view.get_tile(x, y)
+	return {"elapsed_usec": Time.get_ticks_usec() - started, "checksum": checksum}
+
+
 func _test_tile_lookup_equivalence_and_benchmark() -> void:
 	var perf_world := WorldGrid.new()
 	root.add_child(perf_world)
@@ -305,32 +349,40 @@ func _test_tile_lookup_equivalence_and_benchmark() -> void:
 		perf_world.cracks.is_empty() and perf_world.scan_highlights.is_empty(),
 		"world setup clears transient crack and scanner state"
 	)
-	var width := perf_world.world_width
-	var edits: Dictionary = perf_world.modifications
-	var base: PackedInt32Array = perf_world.base_cells
+	var legacy := LegacyTileView.new()
+	legacy.setup(perf_world)
 	var old_checksum := 0
-	var baseline_start := Time.get_ticks_usec()
-	for iteration in range(8):
-		for y in range(8, 72):
-			for x in range(12, 220):
-				var index := y * width + x
-				var key := str(index)
-				old_checksum += int(edits[key]) if edits.has(key) else int(base[index])
-	var legacy_usec := Time.get_ticks_usec() - baseline_start
 	var new_checksum := 0
-	var cached_start := Time.get_ticks_usec()
-	for iteration in range(8):
-		for y in range(8, 72):
-			for x in range(12, 220):
-				new_checksum += perf_world.get_tile(x, y)
-	var cached_usec := Time.get_ticks_usec() - cached_start
+	var legacy_samples: Array[int] = []
+	var cached_samples: Array[int] = []
+	# Warm both paths and alternate order to avoid a one-sided cache/CPU advantage.
+	_probe_legacy_tile_reads(legacy)
+	_probe_cached_tile_reads(perf_world)
+	for sample_index in range(6):
+		var legacy_result: Dictionary
+		var cached_result: Dictionary
+		if sample_index % 2 == 0:
+			legacy_result = _probe_legacy_tile_reads(legacy)
+			cached_result = _probe_cached_tile_reads(perf_world)
+		else:
+			cached_result = _probe_cached_tile_reads(perf_world)
+			legacy_result = _probe_legacy_tile_reads(legacy)
+		legacy_samples.append(int(legacy_result["elapsed_usec"]))
+		cached_samples.append(int(cached_result["elapsed_usec"]))
+		old_checksum = int(legacy_result["checksum"])
+		new_checksum = int(cached_result["checksum"])
 	_check(
 		new_checksum == old_checksum,
-		"cached and prior tile-read paths agree over 106496 matched world queries"
+		"cached and prior tile-read methods agree over 106496 matched world queries"
 	)
-	print("SILKBOUND PERF tile_reads=106496 legacy_usec=%d cached_usec=%d" % [
-		legacy_usec, cached_usec
-	])
+	legacy_samples.sort()
+	cached_samples.sort()
+	var legacy_median := float(legacy_samples[2] + legacy_samples[3]) * 0.5
+	var cached_median := float(cached_samples[2] + cached_samples[3]) * 0.5
+	print(
+		"SILKBOUND PERF tile_reads=106496 trials=6 legacy_median_usec=%0.1f cached_median_usec=%0.1f"
+		% [legacy_median, cached_median]
+	)
 	perf_world.queue_free()
 	await process_frame
 
