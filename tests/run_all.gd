@@ -424,6 +424,30 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		not bool(game.call("is_action_held", "jump")), "touch release clears its own held action"
 	)
+	var emulated_click := InputEventMouseButton.new()
+	emulated_click.device = InputEvent.DEVICE_ID_EMULATION
+	emulated_click.button_index = MOUSE_BUTTON_LEFT
+	emulated_click.pressed = true
+	game.call("_unhandled_input", emulated_click)
+	_check(
+		not bool(game.get("_mouse_mine_held")),
+		"touch-emulated mouse clicks cannot activate held mining"
+	)
+	_check(
+		not bool(game.get("_mouse_aim_active")),
+		"touch-emulated mouse clicks cannot steal pointer aiming"
+	)
+	var physical_click := InputEventMouseButton.new()
+	physical_click.device = InputEvent.DEVICE_ID_MOUSE
+	physical_click.button_index = MOUSE_BUTTON_LEFT
+	physical_click.pressed = true
+	game.call("_unhandled_input", physical_click)
+	_check(bool(game.get("_mouse_mine_held")), "physical mouse click can still initiate mining")
+	physical_click.pressed = false
+	game.call("_input", physical_click)
+	_check(not bool(game.get("_mouse_mine_held")), "physical mouse release stops continuous mining")
+	game.set("_mouse_aim_active", false)
+	game.set("_last_action_was_touch", true)
 	var scan_world: WorldGrid = game.get("world")
 	var scan_player: CharacterBody2D = game.get("player")
 	var scan_origin := scan_world.world_to_cell(scan_player.global_position)

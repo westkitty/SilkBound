@@ -58,6 +58,8 @@ var _attack_repeat := 0.0
 var _last_auto_save_millis := 0
 var _last_mouse_world := Vector2.ZERO
 var _mouse_aim_active := false
+var _mouse_mine_held := false
+var _mouse_attack_held := false
 var _last_action_was_touch := false
 var _scan_highlight_clock := 0.0
 var _survivor_prompt_clock := 0.0
@@ -137,14 +139,14 @@ func _process(delta: float) -> void:
 		_handle_final_death(false)
 		return
 	terraformer.tick(delta, self)
-	if _touch_router.is_held("mine") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if _touch_router.is_held("mine") or _mouse_mine_held:
 		_mine_repeat -= delta
 		if _mine_repeat <= 0.0:
 			_mine_repeat = 0.19
 			_perform_mine()
 	else:
 		_mine_repeat = 0.0
-	if _touch_router.is_held("attack") or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+	if _touch_router.is_held("attack") or _mouse_attack_held:
 		_attack_repeat -= delta
 		if _attack_repeat <= 0.0:
 			_attack_repeat = 0.38
@@ -157,7 +159,20 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
+func _input(event: InputEvent) -> void:
+	# A release must clear a held mouse action even when a Control handles it.
+	if event is InputEventMouseButton and not event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_mouse_mine_held = false
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_mouse_attack_held = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		# Keep mouse emulation enabled for native GUI Buttons, but never treat
+		# synthesized touch events as physical mining/aim/attack input.
+		return
 	if event is InputEventMouseMotion:
 		_last_mouse_world = get_global_mouse_position()
 		_mouse_aim_active = true
@@ -167,8 +182,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_mouse_aim_active = true
 		_last_action_was_touch = false
 		if event.button_index == MOUSE_BUTTON_LEFT:
+			_mouse_mine_held = true
 			_perform_mine()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_mouse_attack_held = true
 			_perform_attack()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.is_action_pressed("interact"):
