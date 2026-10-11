@@ -35,3 +35,17 @@ Changes:
 - Regression coverage: explicitly exercises time-step equivalence, environment sample reuse/invalidation, survey records and mutation persistence, physical-world input cancellation.
 
 Limitations: no target Android phone/tablet was driven through the full play loop; no real-frame timing, thermal, battery or long-session profiling was performed; chunk redraw costs remain dependent on actual hardware. Scope intentionally excludes new biomes, new Drakken powers, world-streaming architecture, new dependencies and changes to gameplay identity.
+
+
+## October 11, 2026 — Round 2: Android input, reentry and readable survey objectives
+
+Feature branch `uplift/glassfall-evidence-20261011`; reviewed implementation commit `4c6ad74a8373c226ec9a13b0dcf268417224660f` builds and passes Godot native checks on GitHub Actions: [push run 38115856673](https://github.com/westkitty/SilkBound/actions/runs/38115856673) and [PR run 38115860476](https://github.com/westkitty/SilkBound/actions/runs/38115860476). The deterministic test suite reports **158 assertions, 0 failures**, and the push run produced an approximately 28.8 MB Android ARM64 debug APK (artifact `11692704418`). Physical device verification is still outstanding.
+
+Accepted cohesive change groups:
+1. Touch input ownership: a global release event outside the original on-screen control releases only the corresponding finger, leaving separate movement/action pointers unaffected. Rebuilding a touch layout also emits releases rather than abandoning held input.
+2. Saved-world safety: on mount, a stored position inside collidable terrain is redirected to a nearby unblocked surface point when available, without editing the world or rewriting progression. Existing player bodies now reset velocity, fall speed, jump requests and touch movement on interplanetary transitions.
+3. Field guidance: the Glassfall HUD shows distance and east/west bearing to the fault, emphasizes scanning intact strata before pressure conversion, and then directs the player to scan the modified fault. The existing records, physical terrain conversion and rewards remain unchanged.
+
+Observed intermediate validation failures were **test-code defects**, corrected before final validation: an untyped scene-instance declaration and a test that entered Glassfall without marking the drive repaired. Both fixes passed subsequent native tests. No new dependencies, shaders, maps, images, sound or canon events were added. No measured runtime performance increase is claimed.
+
+Unverified: Android GUI event dispatch for off-control releases, simultaneous multitouch on real hardware, small-display layout and viewport clipping, long-session thermal behavior, full exploration progression and physically observed save/reload restoration. Follow `docs/ANDROID_FIELD_TEST.md`. This uplift remains in draft PR #2; `main` is not changed.

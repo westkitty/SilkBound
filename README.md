@@ -27,6 +27,7 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 - Upper-right: scan, build mode, inventory, fabrication, ship service and pause. The pause menu opens the field log, compendium and settings.
 - Eight-item build hotbar is centered along the lower edge. Use the settings panel for larger touch targets and left-handed layout.
 - Controls track separate touch-pointer identities, so lifting an action finger does not cancel the movement stick.
+- A finger released beyond its original button or stick releases only that action. Changing control layout, pausing, or suspending play also releases held input.
 - Pausing or suspending play clears held touch actions and virtual-stick ownership. Touch-generated synthetic mouse clicks are not treated as physical mining or aiming input.
 
 ### Keyboard and mouse
@@ -46,6 +47,8 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 godot --path .
 ```
 
+When a saved landing position becomes obstructed by actual terrain edits, loading finds unobstructed nearby ground without modifying the map; interplanetary travel resets leftover movement and fall velocity.
+
 The first launch creates a random world seed and a local save under `user://saves/`. The seed, terrain edits, dropped items, ship, inventory, settings, quests and localized terraforming state are saved locally. No account or network connection is used.
 
 ## Validate and export Android
@@ -57,6 +60,10 @@ The first launch creates a random world seed and a local save under `user://save
 
 The generated APK is intentionally not committed. Check the repository's **Actions → Android debug APK → Artifacts** for the verified build from a successful run.
 
+## Android field verification
+
+Godot import, deterministic regression tests and APK export are automated. **Touch usability, visual clipping, full progression and performance still require device proof.** Follow [the Android field-test checklist](docs/ANDROID_FIELD_TEST.md) before declaring this uplift production-ready. The Glassfall objective now displays a live east/west bearing and explicitly requests scans before and after the local shear.
+
 ## Project boundaries
 
 See:
@@ -65,3 +72,4 @@ See:
 - [`SilkBound_bible.md`](SilkBound_bible.md) — dated implementation decisions, validation and remaining physical-device proof obligations.
 - [`docs/CANON_BOUNDARIES.md`](docs/CANON_BOUNDARIES.md) — canon facts versus simulation invention.
 - [`docs/ASSET_PROVENANCE.md`](docs/ASSET_PROVENANCE.md) — original generated art/audio and regeneration command.
+- [`docs/ANDROID_FIELD_TEST.md`](docs/ANDROID_FIELD_TEST.md) — repeatable Android-device manual QA and proof recording.

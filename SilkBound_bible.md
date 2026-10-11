@@ -40,3 +40,34 @@ Policy: append new dated entries; do not erase history.
 ### Git delivery
 - Implementation pushed to reviewed feature branch through GitHub connector; no force update.
 - Documentation/Bible follow-up commit recorded separately by repository history.
+
+
+## 2026-10-11 — Uplift Round 2: pointer release, saved-position safety and survey bearings
+
+### Purpose / starting state
+- Continued existing draft PR #2, target `westkitty/SilkBound`, same branch `uplift/glassfall-evidence-20261011`.
+- Baseline feature HEAD: `3718fd122cb6f6edb6d6c037fb25f75303e7beb7`; `main` remained `a8c896cc6e9181b84f63fee939eed26c8687eb65`.
+- Three frozen change groups; no new dependency or canon additions; original artwork, game economy, offline saving and planet sequence preserved.
+
+### Changes and evidence
+1. **Held input release outside controls:** `TouchActionButton.release_pointer()`, `VirtualStick.release_pointer()` and `GameHUD._input()` release exactly the lifted finger. A control-layout rebuild now unwinds held input. Test verifies concurrent mine/jump/stick independence and release outside the original control bounds.
+2. **Persistent terrain reentry:** `WorldGrid.captain_space_clear()` and `safe_reentry_position()` detect solid intersections using the original 18x38 capsule footprint. Invalid saved coordinates relocate to nearby unblocked generated surface where possible, without terrain mutation. Mounting a different world uses `SilkboundPlayer.bind_world()` and clears old velocity, knockback/fall bookkeeping and touch/jump states.
+3. **Readable Glassfall goal:** the status objective shows fault bearing in cells (east/west/here) and explicitly signals first/second scans. Tests exercise the legitimate drive-repaired prerequisite and the before/after change in guidance.
+
+### Implementation history
+- `3cafaa16a1b2c012bf77c0009e3a7a8ed9878b52`: pointer ownership changes and tests; initial CI failed because test-scene `var` type inference was invalid.
+- `d9f1a9e0dce1b4e0d0d781abf362e44a88d56878`: explicit `PackedScene` and `Node` declarations; CI success.
+- `bd8ae74debd4a878d09c82b5bad697fbbe04f7bc`: save reentry and integration tests; CI success.
+- `eaec4d5209be4b2934281ba68b99eea539a694ec`: survey bearing and stage guidance; initial tests failed because the test bypassed the travel repair prerequisite.
+- `e49b9a19896ae02c496ab3645e73ce0fada63229`: set repaired-drive precondition in tests; CI success.
+- `4c6ad74a8373c226ec9a13b0dcf268417224660f`: clear player momentum and stale actions on world transition; push and PR CI success, **158 assertions / 0 failures**, Android ARM64 export and artifact upload.
+
+### Protected state / unverified
+- No player Starsilk control, canon Kail cameo, new Drakken mechanism or change to finality of death.
+- Save compatibility and original authored media preserved. No force-push, branch deletion or merge.
+- Native Godot CI verifies code/test and APK packaging; does not verify observed touch dispatch, UI layout, complete physical gameplay or FPS/thermal numbers.
+- Follow `docs/ANDROID_FIELD_TEST.md` for real-device sign-off; draft PR #2 remains open.
+
+### Git delivery
+- GitHub connector pushed each scoped implementation commit to the existing draft PR branch.
+- Documentation follow-up is additive; look at repository history for this documentation commit. No default-branch mutation was performed.
