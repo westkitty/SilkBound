@@ -721,6 +721,11 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 		"paused input also clears the actual virtual-stick ownership"
 	)
 	game.set("is_paused", false)
+	var transitioning_captain: SilkboundPlayer = game.get("player")
+	transitioning_captain.velocity = Vector2(165.0, 925.0)
+	transitioning_captain._highest_fall_speed = 925.0
+	transitioning_captain._jump_request = true
+	transitioning_captain.set_touch_axis(Vector2.RIGHT)
 	var repaired_ship: Dictionary = game.get("ship_state")
 	repaired_ship["engine_repaired"] = true
 	game.set("ship_state", repaired_ship)
@@ -747,6 +752,13 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	_check(
 		bool(game.get("_spawn_adjusted")),
 		"reentry recovery is surfaced as a visible navigation correction"
+	)
+	_check(
+		field_player.velocity == Vector2.ZERO
+		and field_player.touch_axis == Vector2.ZERO
+		and is_zero_approx(field_player._highest_fall_speed)
+		and not field_player._jump_request,
+		"planet entry clears stale velocity, jump and movement from the previous world"
 	)
 	var survey_cell := Vector2i(
 		WorldGrid.GLASSFALL_FAULT_X,

@@ -470,6 +470,7 @@ func _load_settings() -> void:
 
 func _mount_planet(planet_id: String) -> void:
 	if world != null:
+		_cancel_live_input()
 		_snapshot_current_world()
 		if is_instance_valid(backdrop):
 			remove_child(backdrop)
@@ -528,7 +529,7 @@ func _mount_planet(planet_id: String) -> void:
 		player.landed_hard.connect(_on_player_landed_hard)
 	else:
 		player.alive = true
-		player.configure(self, world, spawn_position)
+		player.bind_world(world, spawn_position)
 	if run_ended:
 		player.alive = false
 	_add_ship_visual()

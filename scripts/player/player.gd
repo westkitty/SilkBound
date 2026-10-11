@@ -54,7 +54,12 @@ func bind_world(owner_world: WorldGrid, spawn_position: Vector2) -> void:
 	world = owner_world
 	global_position = spawn_position
 	velocity = Vector2.ZERO
+	touch_axis = Vector2.ZERO
 	_highest_fall_speed = 0.0
+	_jump_request = false
+	_jump_was_held = false
+	_mine_animation_timer = 0.0
+	_attack_animation_timer = 0.0
 	if is_node_ready():
 		_configure_camera_limits()
 
