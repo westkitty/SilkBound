@@ -19,9 +19,7 @@ func _gui_input(event: InputEvent) -> void:
 			_pointer_id = int(event.index)
 			_update_axis(_to_local(event.position))
 			accept_event()
-		elif not event.pressed and int(event.index) == _pointer_id:
-			_pointer_id = -999
-			_reset_axis()
+		elif not event.pressed and release_pointer(int(event.index)):
 			accept_event()
 	elif event is InputEventScreenDrag and int(event.index) == _pointer_id:
 		_update_axis(_to_local(event.position))
@@ -31,12 +29,29 @@ func _gui_input(event: InputEvent) -> void:
 			_mouse_active = true
 			_update_axis(get_local_mouse_position())
 		else:
-			_mouse_active = false
-			_reset_axis()
+			release_mouse()
 		accept_event()
 	elif event is InputEventMouseMotion and _mouse_active:
 		_update_axis(get_local_mouse_position())
 		accept_event()
+
+
+func release_pointer(pointer_id: int) -> bool:
+	if _pointer_id != pointer_id:
+		return false
+	_pointer_id = -999
+	if not _mouse_active:
+		_reset_axis()
+	return true
+
+
+func release_mouse() -> bool:
+	if not _mouse_active:
+		return false
+	_mouse_active = false
+	if _pointer_id == -999:
+		_reset_axis()
+	return true
 
 
 func cancel_input() -> void:

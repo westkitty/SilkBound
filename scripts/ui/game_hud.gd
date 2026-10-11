@@ -389,6 +389,28 @@ func refresh_current_panel() -> void:
 			show_settings()
 
 
+func _input(event: InputEvent) -> void:
+	# Finger-up events outside the original Control still release only the
+	# owning pointer. Never clear another finger's movement or held action.
+	if event is InputEventScreenTouch and not event.pressed:
+		var pointer_id := int(event.index)
+		for button in action_buttons:
+			if is_instance_valid(button):
+				button.release_pointer(pointer_id)
+		if is_instance_valid(stick):
+			stick.release_pointer(pointer_id)
+	elif (
+		event is InputEventMouseButton
+		and not event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+	):
+		for button in action_buttons:
+			if is_instance_valid(button):
+				button.release_pointer(-1)
+		if is_instance_valid(stick):
+			stick.release_mouse()
+
+
 func cancel_live_controls() -> void:
 	for button in action_buttons:
 		if is_instance_valid(button):
@@ -566,6 +588,7 @@ func _build_modal() -> void:
 func _rebuild_touch_controls() -> void:
 	if root == null:
 		return
+	cancel_live_controls()
 	if is_instance_valid(stick):
 		stick.queue_free()
 	for button in action_buttons:

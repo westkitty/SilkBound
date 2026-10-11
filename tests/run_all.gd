@@ -28,6 +28,7 @@ func _run() -> void:
 	_test_combat_rules()
 	_test_quest_state()
 	_test_touch_pointer_isolation()
+	await _test_released_touch_outside_controls()
 	_test_survival_damage_timing()
 	await _test_environment_cache_invalidation()
 	await _test_scanner_resource_coverage()
@@ -259,6 +260,58 @@ func _test_environment_cache_invalidation() -> void:
 	sample_world.set_fault_warning_phase(2)
 	_check(sample_world.fault_warning_phase == 2, "Glassfall pre-failure visual phase is tracked")
 	sample_world.queue_free()
+	await process_frame
+
+
+func _test_released_touch_outside_controls() -> void:
+	var touch_game := load("res://scenes/main.tscn").instantiate()
+	touch_game.set("test_mode", true)
+	root.add_child(touch_game)
+	await process_frame
+	await process_frame
+	var touch_hud: GameHUD = touch_game.get("hud")
+	var jump_button: TouchActionButton = touch_hud.action_buttons[0]
+	var mine_button: TouchActionButton = touch_hud.action_buttons[1]
+	jump_button.active_pointers[411] = true
+	jump_button.action_pressed.emit("jump", 411)
+	mine_button.active_pointers[412] = true
+	mine_button.action_pressed.emit("mine", 412)
+	touch_hud.stick._pointer_id = 413
+	touch_hud.stick._axis = Vector2.RIGHT
+	touch_hud.stick.axis_changed.emit(Vector2.RIGHT)
+	var outside_release := InputEventScreenTouch.new()
+	outside_release.pressed = false
+	outside_release.position = Vector2(-1000.0, -1000.0)
+	outside_release.index = 412
+	touch_hud._input(outside_release)
+	_check(
+		not bool(touch_game.call("is_action_held", "mine"))
+		and bool(touch_game.call("is_action_held", "jump")),
+		"outside release ends only the matching held action"
+	)
+	_check(
+		touch_hud.stick._pointer_id == 413
+		and (touch_game.get("player") as SilkboundPlayer).touch_axis == Vector2.RIGHT,
+		"outside action release preserves an independent movement pointer"
+	)
+	outside_release.index = 413
+	touch_hud._input(outside_release)
+	_check(
+		touch_hud.stick._pointer_id == -999
+		and (touch_game.get("player") as SilkboundPlayer).touch_axis == Vector2.ZERO,
+		"outside stick release immediately neutralizes movement"
+	)
+	_check(bool(touch_game.call("is_action_held", "jump")), "stick release preserves jump")
+	touch_hud.apply_control_settings()
+	_check(
+		not bool(touch_game.call("is_action_held", "jump")),
+		"rebuilding controls releases stale action ownership"
+	)
+	_check(
+		touch_hud.action_buttons.size() == 10,
+		"control rebuild preserves the ten existing actions"
+	)
+	touch_game.queue_free()
 	await process_frame
 
 
