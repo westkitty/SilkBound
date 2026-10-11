@@ -682,22 +682,34 @@ func _save_settings() -> void:
 		hud.apply_control_settings()
 
 
+func fault_bearing() -> String:
+	if world == null or player == null:
+		return "EAST"
+	var cells_to_ridge := WorldGrid.GLASSFALL_FAULT_X - world.world_to_cell(
+		player.global_position
+	).x
+	if cells_to_ridge == 0:
+		return "HERE"
+	return "%d %s" % [absi(cells_to_ridge), "E" if cells_to_ridge > 0 else "W"]
+
+
 func objective_text() -> String:
 	if run_ended:
 		return "RUN CLOSED  /  A LIFE CANNOT BE RESTORED FROM ITS DATA."
 	if not bool(ship_state.get("engine_repaired", false)):
 		return "Recover 6 scrap + 4 ferrite. Repair the drive at your landing ship."
 	if current_planet_id == "glassfall" and not terraformer.transformed:
-		return (
-			"Glassfall pressure: %s. Scan the fault when the terrain settles."
-			% terraformer.phase_name()
-		)
+		if not discoveries.has("glassfall_before"):
+			return "RIDGE %s  /  SCAN BEFORE THE SHEAR" % fault_bearing()
+		return "PRE-FAILURE LOGGED  /  SHEAR %s  /  KEEP CLEAR" % fault_bearing()
 	if (
 		current_planet_id == "glassfall"
 		and terraformer.transformed
 		and not quest_system.is_complete("fault_survey")
 	):
-		return "Scan the shear-glass fault; build a route around the changed ground."
+		if not discoveries.has("glassfall_after"):
+			return "RIDGE %s  /  SCAN THE ALTERED FAULT" % fault_bearing()
+		return "FAULT SCAN %s  /  BUILD A SAFE ROUTE" % fault_bearing()
 	if current_planet_id == "ashlands" and not bool(ship_state.get("iri_onboard", false)):
 		return "Iri is near the old shelter. Two field rations buy a safer ride home."
 	if (
@@ -1556,7 +1568,7 @@ func terraform_notice(stage: int) -> void:
 		world.set_fault_warning_phase(stage)
 	if stage == 1:
 		hud.show_message(
-			"SCANNER WARNING · repeatable ground motion is converging east of the landing shelf.",
+			"GEOLOGICAL WARNING · find the eastern ridge; scan intact strata before the shear.",
 			4.5
 		)
 		if not discoveries.has("glassfall"):
@@ -1564,7 +1576,8 @@ func terraform_notice(stage: int) -> void:
 	elif stage == 2:
 		play_sound("warning")
 		hud.show_message(
-			"PRESSURE ESCALATION · route markers are shifting. Move clear or construct cover.", 4.5
+			"PRESSURE ESCALATION · last chance to scan intact strata; move clear of the shear.",
+			4.5
 		)
 	elif stage == 3:
 		play_sound("warning")

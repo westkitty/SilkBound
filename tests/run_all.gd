@@ -749,8 +749,21 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 		WorldGrid.GLASSFALL_FAULT_X,
 		field_world.surface_at(WorldGrid.GLASSFALL_FAULT_X) - 2
 	)
+	var left_of_ridge := Vector2i(
+		WorldGrid.GLASSFALL_FAULT_X - 4, field_world.surface_at(WorldGrid.GLASSFALL_FAULT_X - 4) - 2
+	)
+	field_player.global_position = field_world.cell_to_world(left_of_ridge)
+	_check(
+		String(game.call("objective_text")).contains("4 E")
+		and String(game.call("objective_text")).contains("SCAN BEFORE"),
+		"the field objective shows direction, distance and time-sensitive pre-failure survey"
+	)
 	field_player.global_position = field_world.cell_to_world(survey_cell)
 	game.call("_scan")
+	_check(
+		String(game.call("objective_text")).contains("PRE-FAILURE LOGGED"),
+		"recording intact strata changes the live objective before the shear"
+	)
 	var field_records: Array = game.get("discoveries")
 	_check(
 		field_records.has("glassfall_before")
@@ -771,6 +784,10 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	pressure.transformed = true
 	pressure.changed_cells = int(altered["changed"])
 	field_world.set_fault_warning_phase(3)
+	_check(
+		String(game.call("objective_text")).contains("SCAN THE ALTERED FAULT"),
+		"new terrain state requests a second independent field observation"
+	)
 	game.call("_scan")
 	field_records = game.get("discoveries")
 	_check(
