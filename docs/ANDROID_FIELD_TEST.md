@@ -1,8 +1,8 @@
 # SILKBOUND Android field-test checklist
 
-**Build under test:** feature commit `4c6ad74a8373c226ec9a13b0dcf268417224660f`.
-**Source build:** [GitHub Actions run 38115856673](https://github.com/westkitty/SilkBound/actions/runs/38115856673).
-**Artifact:** [Android debug APK + checksum](https://github.com/westkitty/SilkBound/actions/runs/38115856673/artifacts/11692704418). This debug build is temporary; check expiration before use.
+**Build under test:** feature implementation commit `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab`.
+**Source build:** [GitHub Actions run 38118392548](https://github.com/westkitty/SilkBound/actions/runs/38118392548).
+**Artifact:** [Android debug APK + checksum](https://github.com/westkitty/SilkBound/actions/runs/38118392548/artifacts/11694422822). This debug build is temporary; check expiration before use.
 
 Record test device model, Android version, display dimensions, scaling, fresh install vs upgrade, input devices, build SHA, and whether this is a real phone, tablet, or emulator. Retain recorded evidence without publishing personal device identifiers.
 
@@ -19,6 +19,8 @@ Record test device model, Android version, display dimensions, scaling, fresh in
 9. **Session resilience:** play at least 15 minutes. Note stutter, frame-time spikes, battery drain, device heating, sound glitches and whether touch-control release failures accumulate.
 10. **Proof and comparison:** where possible, record a 30-60 s screen capture of the controls, a 30-60 s Glassfall sequence, save/load evidence and an instrumented before/after run on the same device. Do not report an FPS uplift without matched measurements.
 
+11. **Scanner signal and viewport traversal:** at Ashlands, mine at least one material and scan repeatedly while moving between chunks. Verify the signal bearing changes with player position, old scan highlights expire, and terrain never disappears when the camera crosses chunk boundaries, zooms or changes orientation. Verify that distant terrain remains physically solid even when its artwork is offscreen.
+
 ## Results to preserve
 
 | Check | PASS / FAIL / NOT RUN | Device evidence / notes |
@@ -33,5 +35,6 @@ Record test device model, Android version, display dimensions, scaling, fresh in
 | UI sizing and reduced effects | NOT RUN | |
 | Long-session reliability | NOT RUN | |
 | Matched performance numbers | NOT RUN | |
+| Scanner bearing and terrain visibility | NOT RUN | |
 
 **Release gate:** A CI-green debug APK is not a hardware-qualified release. Keep draft PR #2 unmerged until material failures are fixed or explicitly accepted, and document the actual device proof.

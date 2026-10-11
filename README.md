@@ -60,6 +60,12 @@ The first launch creates a random world seed and a local save under `user://save
 
 The generated APK is intentionally not committed. Check the repository's **Actions → Android debug APK → Artifacts** for the verified build from a successful run.
 
+## Survey signal and rendering efficiency
+
+A scan still returns material-cell counts and temporary colored overlays. It now also identifies one **nearby priority material** with a real east/west/up/down bearing (for example, `SIGNAL WRECKAGE / 3 E 2 DOWN`), using actual scanned cells rather than a fictional waypoint.
+
+To reduce repeated rendering work, scanner overlays redraw only changed terrain chunks, and off-camera terrain artwork is hidden with one chunk of camera-smoothing margin. Collision continues across the entire map. The resolved tile cache keeps terrain reads consistent with saved edits without changing save structure. See [the source-level performance evidence](docs/PERFORMANCE.md); do not treat headless timings as Android FPS data.
+
 ## Android field verification
 
 Godot import, deterministic regression tests and APK export are automated. **Touch usability, visual clipping, full progression and performance still require device proof.** Follow [the Android field-test checklist](docs/ANDROID_FIELD_TEST.md) before declaring this uplift production-ready. The Glassfall objective now displays a live east/west bearing and explicitly requests scans before and after the local shear.
@@ -73,3 +79,5 @@ See:
 - [`docs/CANON_BOUNDARIES.md`](docs/CANON_BOUNDARIES.md) — canon facts versus simulation invention.
 - [`docs/ASSET_PROVENANCE.md`](docs/ASSET_PROVENANCE.md) — original generated art/audio and regeneration command.
 - [`docs/ANDROID_FIELD_TEST.md`](docs/ANDROID_FIELD_TEST.md) — repeatable Android-device manual QA and proof recording.
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — matched headless benchmark method and remaining performance unknowns.
+- [`OPERATIONAL_STATE.md`](OPERATIONAL_STATE.md) — current verified and unverified project control plane.

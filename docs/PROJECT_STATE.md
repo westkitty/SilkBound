@@ -49,3 +49,14 @@ Accepted cohesive change groups:
 Observed intermediate validation failures were **test-code defects**, corrected before final validation: an untyped scene-instance declaration and a test that entered Glassfall without marking the drive repaired. Both fixes passed subsequent native tests. No new dependencies, shaders, maps, images, sound or canon events were added. No measured runtime performance increase is claimed.
 
 Unverified: Android GUI event dispatch for off-control releases, simultaneous multitouch on real hardware, small-display layout and viewport clipping, long-session thermal behavior, full exploration progression and physically observed save/reload restoration. Follow `docs/ANDROID_FIELD_TEST.md`. This uplift remains in draft PR #2; `main` is not changed.
+
+
+## October 11, 2026 — Performance / QQQ bounded repair pass
+
+Working branch: `uplift/glassfall-evidence-20261011`; implementation head `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab` passed both [push CI 38118392548](https://github.com/westkitty/SilkBound/actions/runs/38118392548) and [PR CI 38118394708](https://github.com/westkitty/SilkBound/actions/runs/38118394708). Godot import, tests (**178 assertions, 0 failures**), headless startup and Android ARM64 APK export passed. Built APK archive: artifact `11694422822`.
+
+Changes: resolved packed-array tile reads synchronized with edit/reload paths; scanner overlay invalidates only changed chunks and skips unchanged repeats; old highlights clear on expiry; squared-distance scanning also returns real nearest material coordinates for a priority compass-style signal; camera-aware visual-only chunk culling keeps an offscreen safety margin and leaves collision active. `WorldGrid.setup()` now clears stale transient cracks and scan overlays on reuse.
+
+Verified targeted measurements: matched six-trial Godot headless tile-read median **47,681.5 µs reference -> 23,629.0 µs cached** for 106,496 queries; scanner request count **9 -> 1** on the tested local scan, and near-ship visible terrain chunks **9 -> 2** at a 1280px test viewport. These are implementation-specific, runner-specific metrics, not measured Android frame rates. Earlier one-shot tile timing fluctuated and is superseded by the paired method-call benchmark. Source and method in `docs/PERFORMANCE.md`.
+
+No new dependencies or visual assets; previously locked non-canon character/cosmology, progression gates, terrain save schema, and touch controls preserved in tested paths. Hardware visual/performance behavior remains unverified. PR #2 is intentionally still a draft; `main` unchanged.

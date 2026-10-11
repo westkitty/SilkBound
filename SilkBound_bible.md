@@ -71,3 +71,20 @@ Policy: append new dated entries; do not erase history.
 ### Git delivery
 - GitHub connector pushed each scoped implementation commit to the existing draft PR branch.
 - Documentation follow-up is additive; look at repository history for this documentation commit. No default-branch mutation was performed.
+
+
+## 2026-10-11 — Source-level performance and QQQ closure audit
+
+**Verified source baseline:** draft PR #2 HEAD `212120341e7c3c14d687b5acea1f63a181b97f58`. Existing main `a8c896cc6e9181b84f63fee939eed26c8687eb65` remained untouched. Baseline automated suite: 158 assertions, 0 failures; device FPS unknown.
+
+**Bounded improvement scope:** (1) reduce redundant drawing of scanner overlays and distant terrain while preserving collision and world visibility on travel; (2) make high-frequency tile lookup efficient without changing edit serialization; (3) provide a physically grounded nearest-return bearing useful for salvage, plus new test and documentation proof.
+
+**Implementation commits:** `2cf85397191e670159c6057f506d573ad4de85ab` (tile cache, redraw focus, bearing), `ec0512690c220f43f8374d8a66371ab19b8d8d93` (cross-chunk overlay regression), `ecf8825579c0ddeaa357f70e021d59a8dabef32e` (visual chunk culling), `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab` (fair six-pair headless timing fixture).
+
+**Validated:** push Actions `38118392548` and PR Actions `38118394708` SUCCESS for the same implementation HEAD: **178 assertions, 0 failures**, import, startup smoke, Android ARM64 APK export, package validation, checksum upload. Artifact `11694422822` (debug APK ZIP, not a release). No physical device run.
+
+**Measured only in headless CI:** 106,496 tile accesses × six paired warm/alternated trials: legacy median 47,681.5 µs; cached median 23,629.0 µs (roughly 50% lower). Earlier one-pass measurement varied and was rejected as a speed claim. Scanner overlay redraw requests decrease 9 -> 1 for a one-chunk scan, repeated identical scans request 0. At a 1280px test viewport, 2 of 9 terrain-art chunks remain visible near the ship; all 9 physics chunks remain intact. These are not GPU draw-call counts or device FPS results. The extra resolved tile buffer adds roughly 99 KiB per active 288×88 planet.
+
+**QQQ repair / regression:** `WorldGrid.setup` failed to clear previous mining-crack and scanner transient state on reuse; this was corrected and guarded. Scanner focus changes have cross-chunk move/expiry tests, exact resource count and bearing assertions, editor import, smoke and APK build. No dependency, config, save-schema or canonical Starsilk additions.
+
+**Deferred:** physical-screen continuity after culling, Android low-end FPS/p95 frame times, memory, battery and thermal profiling, long-session resource lifecycle, bounded collision-chunk rebuild cost during repeated mining, save/load on-device, all procedures in `docs/ANDROID_FIELD_TEST.md`. Do not merge draft PR #2 until material hardware findings are accepted or repaired. Documentation closeout commit recorded separately by Git history.
