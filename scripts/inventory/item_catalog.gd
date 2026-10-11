@@ -294,6 +294,18 @@ const DISCOVERIES := {
 		"text":
 		"The distant shards read as a volcanic-glass ridge, not a structure. A local shear can overwrite a route and remain after travel. This generated pressure event is not a named catastrophe site."
 	},
+	"glassfall_before":
+	{
+		"label": "SIMULATION RECORD — Glassfall / Before",
+		"text":
+		"Survey readings show stressed, still-intact layers beneath the volcanic-glass ridge. A practical route exists here now; pressure can erase it. These measurements describe an invented survey event, not a named canon attack."
+	},
+	"glassfall_after":
+	{
+		"label": "SIMULATION RECORD — Glassfall / After",
+		"text":
+		"At the same survey coordinates, pressure has turned intact strata into a permanent open shear and an exposed fault. The before/after evidence changes the route, not the nature of Starsilk. The terrain and its damage persist on return."
+	},
 	"drowned":
 	{
 		"label": "SIMULATION RECORD — Drowned Remnant",

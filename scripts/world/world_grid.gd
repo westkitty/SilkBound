@@ -5,6 +5,8 @@ const Generator = preload("res://scripts/world/planet_generator.gd")
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
 const CHUNK_WIDTH := 32
 const TILE_SIZE := 32
+const GLASSFALL_FAULT_X := 62
+const GLASSFALL_FAULT_RADIUS := 7
 
 var planet_id: String = "ashlands"
 var biome: int = Generator.Biome.ASHLANDS
@@ -22,6 +24,13 @@ var collision_chunks: Dictionary = {}
 var spawn_cell := Vector2i(10, 20)
 var _batching := false
 var _dirty_chunks: Dictionary = {}
+var fault_warning_phase := 0
+var _environment_revision := 0
+var _sampled_revision := -1
+var _sampled_cell := Vector2i(-9999, -9999)
+var _sampled_shelter := false
+var _sampled_thermal := false
+var environment_sample_count := 0
 
 
 func setup(
@@ -34,6 +43,11 @@ func setup(
 	planet_id = id
 	world_seed = seed_value
 	biome = biome_value
+	fault_warning_phase = 0
+	_environment_revision = 0
+	_sampled_revision = -1
+	_sampled_cell = Vector2i(-9999, -9999)
+	environment_sample_count = 0
 	var generated := Generator.generate(seed_value, biome_value)
 	world_width = int(generated["width"])
 	world_height = int(generated["height"])
@@ -110,6 +124,8 @@ func set_tile(x: int, y: int, tile_id: int) -> bool:
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
+	cracks.erase(index)
+	_environment_revision += 1
 	_refresh_cell(x, y)
 	return true
 
@@ -259,30 +275,63 @@ func is_underwater(world_position: Vector2) -> bool:
 
 
 func is_thermal_zone(world_position: Vector2) -> bool:
-	var cell := world_to_cell(world_position)
-	if biome != Generator.Biome.GLASSFALL:
-		return false
-	for y in range(cell.y - 1, cell.y + 2):
-		for x in range(cell.x - 1, cell.x + 2):
-			if get_tile(x, y) == Tiles.Tile.FAULT:
-				return true
-	return false
+	_sample_environment(world_to_cell(world_position))
+	return _sampled_thermal
 
 
 func is_sheltered(world_position: Vector2) -> bool:
-	var cell := world_to_cell(world_position)
+	_sample_environment(world_to_cell(world_position))
+	return _sampled_shelter
+
+
+func _sample_environment(cell: Vector2i) -> void:
+	# The HUD consults both hazards every frame. Reuse one bounded sample until
+	# movement or a real terrain edit changes the answer.
+	if cell == _sampled_cell and _sampled_revision == _environment_revision:
+		return
+	_sampled_cell = cell
+	_sampled_revision = _environment_revision
+	environment_sample_count += 1
+	_sampled_thermal = false
+	if biome == Generator.Biome.GLASSFALL:
+		for y in range(cell.y - 1, cell.y + 2):
+			for x in range(cell.x - 1, cell.x + 2):
+				if get_tile(x, y) == Tiles.Tile.FAULT:
+					_sampled_thermal = true
+					break
+			if _sampled_thermal:
+				break
 	var walls := 0
 	var floor_found := false
+	var nearby_lamp := false
 	for y in range(maxi(0, cell.y - 4), mini(world_height, cell.y + 5)):
 		for x in range(maxi(0, cell.x - 5), mini(world_width, cell.x + 6)):
 			var tile_id := get_tile(x, y)
+			if tile_id == Tiles.Tile.LAMP:
+				nearby_lamp = true
+				break
 			if tile_id in [Tiles.Tile.WALL, Tiles.Tile.REINFORCED, Tiles.Tile.BRICK]:
 				walls += 1
 			if tile_id in [Tiles.Tile.FLOOR, Tiles.Tile.BRICK]:
 				floor_found = true
-			if tile_id == Tiles.Tile.LAMP:
-				return true
-	return walls >= 3 and floor_found
+		if nearby_lamp:
+			break
+	_sampled_shelter = nearby_lamp or (walls >= 3 and floor_found)
+
+
+func set_fault_warning_phase(next_phase: int) -> void:
+	if biome != Generator.Biome.GLASSFALL:
+		return
+	var phase_value := clampi(next_phase, 0, 3)
+	if fault_warning_phase == phase_value:
+		return
+	fault_warning_phase = phase_value
+	# Preview art changes; no collision rebuild or terrain edit is required.
+	var first_chunk := int((GLASSFALL_FAULT_X - GLASSFALL_FAULT_RADIUS) / CHUNK_WIDTH)
+	var last_chunk := int((GLASSFALL_FAULT_X + GLASSFALL_FAULT_RADIUS) / CHUNK_WIDTH)
+	for index in range(first_chunk, last_chunk + 1):
+		if chunk_views.has(index):
+			(chunk_views[index] as CanvasItem).queue_redraw()
 
 
 func has_tile_near(world_position: Vector2, tile_id: int, radius: int = 3) -> bool:
@@ -307,6 +356,7 @@ func _set_tile_batched(x: int, y: int, tile_id: int) -> void:
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
+	cracks.erase(index)
 	var chunk_index := int(x / CHUNK_WIDTH)
 	_dirty_chunks[chunk_index] = true
 
@@ -320,6 +370,8 @@ func _refresh_cell(x: int, _y: int) -> void:
 
 
 func _refresh_dirty_chunks() -> void:
+	if not _dirty_chunks.is_empty():
+		_environment_revision += 1
 	for chunk_index in _dirty_chunks.keys():
 		_refresh_chunk(int(chunk_index))
 	_dirty_chunks.clear()

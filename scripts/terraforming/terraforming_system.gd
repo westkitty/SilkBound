@@ -37,7 +37,9 @@ func tick(delta: float, game: Node) -> void:
 		var world: WorldGrid = game.get("world")
 		if world == null:
 			return
-		var result := world.apply_terraform(62, 7)
+		var result := world.apply_terraform(
+			WorldGrid.GLASSFALL_FAULT_X, WorldGrid.GLASSFALL_FAULT_RADIUS
+		)
 		center_cell = Vector2i(result["center"])
 		changed_cells = int(result["changed"])
 		phase = 3

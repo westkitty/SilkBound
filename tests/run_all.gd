@@ -2,6 +2,8 @@ extends SceneTree
 
 const Generator = preload("res://scripts/world/planet_generator.gd")
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
+const Items = preload("res://scripts/inventory/item_catalog.gd")
+const Survival = preload("res://scripts/survival/survival_system.gd")
 const TerrainChunk = preload("res://scripts/world/terrain_chunk.gd")
 const TestInventory = preload("res://scripts/inventory/inventory.gd")
 const Crafting = preload("res://scripts/inventory/crafting.gd")
@@ -26,6 +28,8 @@ func _run() -> void:
 	_test_combat_rules()
 	_test_quest_state()
 	_test_touch_pointer_isolation()
+	_test_survival_damage_timing()
+	await _test_environment_cache_invalidation()
 	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
 	_test_versioned_save_round_trip()
@@ -188,6 +192,74 @@ func _test_quest_state() -> void:
 	)
 	_check(quests.is_complete("iri_supplies"), "completed rescue remains complete")
 	_check(not quests.complete("iri_supplies"), "completed quest cannot be awarded twice")
+
+
+func _test_survival_damage_timing() -> void:
+	var stalled := Survival.new()
+	var stepped := Survival.new()
+	stalled.setup({"health": 100.0, "oxygen": 0.0})
+	stepped.setup({"health": 100.0, "oxygen": 0.0})
+	stalled.tick(3.25, {"underwater": true})
+	for iteration in range(13):
+		stepped.tick(0.25, {"underwater": true})
+	_check(
+		is_equal_approx(stalled.health, stepped.health) and stalled.health == 85.0,
+		"a long frame applies every survival damage interval"
+	)
+	stalled.tick(0.75, {"underwater": true})
+	stepped.tick(0.75, {"underwater": true})
+	_check(
+		is_equal_approx(stalled.health, stepped.health) and stalled.health == 80.0,
+		"damage interval remainder survives across frame boundaries"
+	)
+
+
+func _test_environment_cache_invalidation() -> void:
+	var sample_world := WorldGrid.new()
+	root.add_child(sample_world)
+	sample_world.setup("environment-cache", 773421, Generator.Biome.GLASSFALL)
+	var cell := Vector2i(9, sample_world.surface_at(9) - 3)
+	var sample_position := sample_world.cell_to_world(cell)
+	var before_shelter := sample_world.is_sheltered(sample_position)
+	_check(not before_shelter, "landing shelf is not initially an artificial shelter")
+	_check(not sample_world.is_thermal_zone(sample_position), "untouched shelf is thermally stable")
+	var baseline_samples := sample_world.environment_sample_count
+	for iteration in range(30):
+		sample_world.is_sheltered(sample_position)
+		sample_world.is_thermal_zone(sample_position)
+	_check(
+		sample_world.environment_sample_count == baseline_samples,
+		"unchanged location reuses one bounded environment sample"
+	)
+	_check(sample_world.set_tile(cell.x + 1, cell.y, Tiles.Tile.LAMP), "test lamp is placed")
+	_check(sample_world.is_sheltered(sample_position), "placement immediately updates shelter")
+	_check(
+		sample_world.environment_sample_count == baseline_samples + 1,
+		"terrain edits invalidate the cached environment"
+	)
+	_check(sample_world.set_tile(cell.x + 1, cell.y, Tiles.Tile.AIR), "test lamp is removed")
+	_check(
+		not sample_world.is_sheltered(sample_position), "removed lamp cannot leave false shelter"
+	)
+	_check(sample_world.set_tile(cell.x - 1, cell.y, Tiles.Tile.FAULT), "test fault is exposed")
+	_check(sample_world.is_thermal_zone(sample_position), "new fault triggers local heat warning")
+	_check(sample_world.set_tile(cell.x - 1, cell.y, Tiles.Tile.AIR), "test fault is removed")
+	_check(not sample_world.is_thermal_zone(sample_position), "removed fault clears heat warning")
+	var surface_y := sample_world.surface_at(10)
+	sample_world.mine_cell(10, surface_y, 1.0)
+	_check(
+		sample_world.cracks.has(sample_world.cell_index(10, surface_y)),
+		"partial mining creates a tracked crack"
+	)
+	sample_world.set_tile(10, surface_y, Tiles.Tile.AIR)
+	_check(
+		not sample_world.cracks.has(sample_world.cell_index(10, surface_y)),
+		"replaced terrain does not inherit obsolete mining damage"
+	)
+	sample_world.set_fault_warning_phase(2)
+	_check(sample_world.fault_warning_phase == 2, "Glassfall pre-failure visual phase is tracked")
+	sample_world.queue_free()
+	await process_frame
 
 
 func _test_touch_pointer_isolation() -> void:
@@ -539,5 +611,59 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 			"long field records wrap and reserve room for their evidence text"
 		)
 	hud.action_requested.emit("close")
+	game.call("_on_hud_touch_pressed", "mine", 903)
+	game.call("_on_hud_stick_changed", Vector2.RIGHT)
+	game.set("is_paused", true)
+	game.call("_process", 0.016)
+	_check(
+		not bool(game.call("is_action_held", "mine")),
+		"opening a paused interface clears held mining input"
+	)
+	_check(
+		(game.get("player") as SilkboundPlayer).touch_axis == Vector2.ZERO,
+		"pausing cannot leave virtual-stick movement latched"
+	)
+	game.set("is_paused", false)
+	game.call("_mount_planet", "glassfall")
+	var field_world: WorldGrid = game.get("world")
+	var field_player: SilkboundPlayer = game.get("player")
+	var survey_cell := Vector2i(
+		WorldGrid.GLASSFALL_FAULT_X,
+		field_world.surface_at(WorldGrid.GLASSFALL_FAULT_X) - 2
+	)
+	field_player.global_position = field_world.cell_to_world(survey_cell)
+	game.call("_scan")
+	var field_records: Array = game.get("discoveries")
+	_check(
+		field_records.has("glassfall_before")
+		and hud.message_label.text.contains("PRE-FAILURE STRATA RECORDED"),
+		"scanning the intact ridge stores real pre-failure evidence"
+	)
+	var pressure: TerraformingSystem = game.get("terraformer")
+	pressure.phase = 2
+	game.call("terraform_notice", 2)
+	_check(
+		field_world.fault_warning_phase == 2,
+		"the visible fault warning follows the actual geological phase"
+	)
+	var altered := field_world.apply_terraform(
+		WorldGrid.GLASSFALL_FAULT_X, WorldGrid.GLASSFALL_FAULT_RADIUS
+	)
+	pressure.phase = 3
+	pressure.transformed = true
+	pressure.changed_cells = int(altered["changed"])
+	field_world.set_fault_warning_phase(3)
+	game.call("_scan")
+	field_records = game.get("discoveries")
+	_check(
+		field_records.has("glassfall_after")
+		and hud.message_label.text.contains("POST-FAILURE STRATA RECORDED"),
+		"the same site scan now records the permanently altered ground"
+	)
+	_check(
+		Items.DISCOVERIES.has("glassfall_before")
+		and Items.DISCOVERIES.has("glassfall_after"),
+		"both Glassfall states have separately readable compendium records"
+	)
 	game.queue_free()
 	await process_frame

@@ -103,7 +103,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if is_paused or run_ended or world == null or player == null:
+	if is_paused or run_ended:
+		_cancel_live_input()
+		return
+	if world == null or player == null:
 		return
 	_autosave_clock += delta
 	if _autosave_clock >= 40.0:
@@ -156,7 +159,8 @@ func _process(delta: float) -> void:
 	var nearest_survivor := _nearest_survivor(110.0)
 	if nearest_survivor != null and _survivor_prompt_clock <= 0.0:
 		_survivor_prompt_clock = 8.0
-	queue_redraw()
+	if build_mode:
+		queue_redraw()
 
 
 func _input(event: InputEvent) -> void:
@@ -209,9 +213,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		_cancel_live_input()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		if not run_ended and world != null:
 			save_game()
+
+
+func _cancel_live_input() -> void:
+	_touch_router.clear()
+	_mouse_mine_held = false
+	_mouse_attack_held = false
+	_mouse_aim_active = false
+	if is_instance_valid(player):
+		player.set_touch_axis(Vector2.ZERO)
 
 
 func _draw() -> void:
@@ -522,6 +537,8 @@ func _mount_planet(planet_id: String) -> void:
 
 func _terraformer_for_planet(state: Dictionary) -> void:
 	terraformer.setup(state.get("terraform", {}))
+	if world != null:
+		world.set_fault_warning_phase(terraformer.phase)
 
 
 func _add_ship_visual() -> void:
@@ -1161,8 +1178,23 @@ func _scan() -> void:
 	]:
 		if int(result[key]) > 0:
 			summary_parts.append("%s %d CELLS" % [String(key).to_upper(), int(result[key])])
-	if current_planet_id == "glassfall" and terraformer.phase < 3:
-		summary_parts.append("PRESSURE %s" % terraformer.phase_name())
+	if current_planet_id == "glassfall":
+		var distance_to_shear := absi(
+			world.world_to_cell(player.global_position).x - WorldGrid.GLASSFALL_FAULT_X
+		)
+		if terraformer.phase < 3:
+			summary_parts.append("PRESSURE %s" % terraformer.phase_name())
+			if distance_to_shear <= range_cells and not discoveries.has("glassfall_before"):
+				discoveries.append("glassfall_before")
+				summary_parts.append("PRE-FAILURE STRATA RECORDED")
+		elif (
+			terraformer.transformed
+			and int(result["fault"]) > 0
+			and distance_to_shear <= range_cells
+			and not discoveries.has("glassfall_after")
+		):
+			discoveries.append("glassfall_after")
+			summary_parts.append("POST-FAILURE STRATA RECORDED")
 	if current_planet_id == "glassfall" and terraformer.transformed and int(result["fault"]) > 0:
 		quest_system.activate(
 			"fault_survey",
@@ -1500,6 +1532,8 @@ func collect_pickup(pickup: Node, item_id: String, amount: int) -> bool:
 
 
 func terraform_notice(stage: int) -> void:
+	if world != null:
+		world.set_fault_warning_phase(stage)
 	if stage == 1:
 		hud.show_message(
 			"SCANNER WARNING · repeatable ground motion is converging east of the landing shelf.",
