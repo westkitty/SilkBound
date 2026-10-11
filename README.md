@@ -11,9 +11,10 @@ This is original Starsilk fiction and game code, not a Starbound reskin. Starsil
 1. Start beside the damaged vessel on the Ashlands landing shelf.
 2. Cut the guaranteed salvage outcrop east of the ship; pickup drops physically land in the world.
 3. Carry **6 scrap + 4 ferrite** to the ship console and patch its drive. This unlocks the real Glassfall route.
-4. Survey Glassfall. Geological pressure warns, escalates, and changes a bounded section of terrain; its shallow shear remains after saving or leaving.
-5. Fabricate a conventional coolant loop from recovered ferrite, glass and crystal to reach the Drowned Remnant.
-6. Build shelter, use consumables, scan technical evidence, meet Iri and Vale, and return to earlier planets with their edits intact.
+4. Survey Glassfall. Scan near the eastern fault ridge before its pressure event to preserve a **PRE-FAILURE** field record. The exposed seam gains static amber/red ground markings as pressure escalates; the subsequent local shear changes actual terrain.
+5. Scan that same site after the fault conversion to preserve a separate **POST-FAILURE** field record. Terrain edits, field discoveries and changed routes are saved locally, including a save immediately after newly earned evidence.
+6. Fabricate a conventional coolant loop from recovered ferrite, glass and crystal to reach the Drowned Remnant.
+7. Build shelter, use consumables, scan technical evidence, meet Iri and Vale, and return to earlier planets with their edits intact.
 
 Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enemy attacks, ship upgrades, planet gates, rescues and persistent saves are connected gameplay systems rather than menu-only labels.
 
@@ -26,6 +27,7 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 - Upper-right: scan, build mode, inventory, fabrication, ship service and pause. The pause menu opens the field log, compendium and settings.
 - Eight-item build hotbar is centered along the lower edge. Use the settings panel for larger touch targets and left-handed layout.
 - Controls track separate touch-pointer identities, so lifting an action finger does not cancel the movement stick.
+- Pausing or suspending play clears held touch actions and virtual-stick ownership. Touch-generated synthetic mouse clicks are not treated as physical mining or aiming input.
 
 ### Keyboard and mouse
 
@@ -60,5 +62,6 @@ The generated APK is intentionally not committed. Check the repository's **Actio
 See:
 
 - [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — implemented systems and known scope limits.
+- [`SilkBound_bible.md`](SilkBound_bible.md) — dated implementation decisions, validation and remaining physical-device proof obligations.
 - [`docs/CANON_BOUNDARIES.md`](docs/CANON_BOUNDARIES.md) — canon facts versus simulation invention.
 - [`docs/ASSET_PROVENANCE.md`](docs/ASSET_PROVENANCE.md) — original generated art/audio and regeneration command.
