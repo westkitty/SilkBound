@@ -364,6 +364,21 @@ func _test_versioned_save_round_trip() -> void:
 		),
 		"malformed primary save recovers the last valid backup"
 	)
+	_check(Save.save_slot(recovered["data"], "test_contract"), "recovered data saves again")
+	var damaged_again := FileAccess.open("user://saves/test_contract.json", FileAccess.WRITE)
+	_check(damaged_again != null, "test can simulate repeated primary damage")
+	if damaged_again != null:
+		damaged_again.store_string("{damaged-again")
+		damaged_again.close()
+	var recovered_again := Save.load_slot("test_contract")
+	_check(
+		(
+			bool(recovered_again.get("ok", false))
+			and bool(recovered_again.get("recovered", false))
+			and int(recovered_again["data"]["inventory"]["scrap"]) == 7
+		),
+		"re-saving recovered data preserves a second chance to restore the last good generation"
+	)
 	Save.delete_slot("test_contract")
 	_check(
 		not bool(Save.load_slot("../escape")["ok"]),
@@ -383,6 +398,15 @@ func _test_main_scene_startup_and_touch_signals() -> void:
 	await process_frame
 	_check(game.get("world") is WorldGrid, "startup mounts a generated planet")
 	_check(game.get("player") is CharacterBody2D, "startup creates a CharacterBody2D player")
+	_check(
+		String(game.get("player").name) == "FieldCaptain",
+		"simulation player remains an original civilian captain"
+	)
+	_check(
+		not FileAccess.get_file_as_string("res://scripts/core/game.gd").contains("KAIL")
+		and not FileAccess.get_file_as_string("res://scripts/ui/game_hud.gd").contains("KAIL"),
+		"non-canon player and survivor text must not represent the canonical character Kail"
+	)
 	_check(game.get("hud") != null, "startup creates the touch HUD")
 	var hud: GameHUD = game.get("hud")
 	hud.touch_action_pressed.emit("jump", 101)

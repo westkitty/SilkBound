@@ -29,13 +29,28 @@ static func save_slot(data: Dictionary, slot: String = "slot_01") -> bool:
 	var temp_abs := ProjectSettings.globalize_path(temporary)
 	var backup_abs := ProjectSettings.globalize_path(backup)
 	if FileAccess.file_exists(target):
-		if FileAccess.file_exists(backup):
-			DirAccess.remove_absolute(backup_abs)
-		var backup_error := DirAccess.rename_absolute(target_abs, backup_abs)
-		if backup_error != OK:
-			DirAccess.remove_absolute(temp_abs)
-			push_error("Could not preserve the last good save: %s" % error_string(backup_error))
-			return false
+		if (
+			not bool(_read_save(target).get("ok", false))
+			and bool(_read_save(backup).get("ok", false))
+		):
+			# Recovery must not rotate a damaged primary over the last valid backup.
+			var remove_error := DirAccess.remove_absolute(target_abs)
+			if remove_error != OK:
+				DirAccess.remove_absolute(temp_abs)
+				push_error("Could not remove the damaged save: %s" % error_string(remove_error))
+				return false
+		else:
+			if FileAccess.file_exists(backup):
+				var backup_remove_error := DirAccess.remove_absolute(backup_abs)
+				if backup_remove_error != OK:
+					DirAccess.remove_absolute(temp_abs)
+					push_error("Could not rotate the save backup: %s" % error_string(backup_remove_error))
+					return false
+			var backup_error := DirAccess.rename_absolute(target_abs, backup_abs)
+			if backup_error != OK:
+				DirAccess.remove_absolute(temp_abs)
+				push_error("Could not preserve the last good save: %s" % error_string(backup_error))
+				return false
 	var commit_error := DirAccess.rename_absolute(temp_abs, target_abs)
 	if commit_error != OK:
 		if FileAccess.file_exists(backup):

@@ -478,7 +478,7 @@ func _mount_planet(planet_id: String) -> void:
 				)
 	if player == null or not is_instance_valid(player):
 		player = PlayerScene.instantiate() as SilkboundPlayer
-		player.name = "KAIL"
+		player.name = "FieldCaptain"
 		add_child(player)
 		player.configure(self, world, spawn_position)
 		player.landed_hard.connect(_on_player_landed_hard)
@@ -1348,7 +1348,7 @@ func interact_npc(survivor_id: String) -> void:
 				hud
 				. show_dialogue(
 					"IRI / ASHLANDS",
-					"Iri made it aboard. Two field rations paid for the trip; she transferred her remaining medfoam kit to KAIL. The choice changed who gets the next seat, not the war.",
+					"Iri made it aboard. Two field rations paid for the trip; she transferred her remaining medfoam kit to the captain. The choice changed who gets the next seat, not the war.",
 					complete_options
 				)
 			)
@@ -1410,14 +1410,14 @@ func _handle_npc_choice(choice: String) -> void:
 			quest_system
 			. complete(
 				"iri_supplies",
-				"Two field rations covered the trip. Iri is aboard, and her remaining medfoam kit was transferred to KAIL."
+				"Two field rations covered the trip. Iri is aboard, and her remaining medfoam kit was transferred to the captain."
 			)
 		)
 		for survivor in get_tree().get_nodes_in_group("silkbound_survivors"):
 			if is_instance_valid(survivor) and survivor.get("survivor_id") == "iri":
 				survivor.queue_free()
 		_add_item_or_drop("medfoam", 1, player.global_position)
-		hud.show_message("Iri is aboard · her medfoam kit is transferred to KAIL.", 2.8)
+		hud.show_message("Iri is aboard · her medfoam kit is transferred to the captain.", 2.8)
 	elif choice == "vale_archive":
 		if not inventory.spend({"archive_shard": 3}):
 			hud.show_message("Three archive shards are required.", 1.5)

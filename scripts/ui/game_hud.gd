@@ -59,7 +59,7 @@ func refresh() -> void:
 		energy = roundi(survival.energy)
 		oxygen = roundi(survival.oxygen)
 		exposure = roundi(survival.exposure)
-	status_label.text = "KAIL  /  SUIT %03d   POWER %03d   AIR %03d" % [hp, energy, oxygen]
+	status_label.text = "CAPTAIN  /  SUIT %03d   POWER %03d   AIR %03d" % [hp, energy, oxygen]
 	var planet_name := String(game.call("planet_display_name"))
 	var seed_value := int(game.get("base_seed"))
 	var ship_state: Dictionary = game.get("ship_state")
