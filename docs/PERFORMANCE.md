@@ -40,3 +40,10 @@ Use the **same Android device, seed, gameplay route and visual settings** on bas
 Next source-level hotspot to investigate if actual profiling corroborates it: `WorldGrid._refresh_chunk()` rebuilds an entire collision chunk after an individual solid-tile edit. Changing it requires a physics regression suite and must preserve immediate mining/build collisions.
 
 Visual culling keeps the whole world's collision bodies intact and a one-chunk margin around the player's camera. This preserves distant solid terrain, but **requires physical visual proof** to rule out pop-in under camera smoothing or wide display conditions. See [Android field testing](ANDROID_FIELD_TEST.md).
+
+
+## 2026-10-12 — Collision rebuild suppression (local, uncommitted)
+
+Previously every `WorldGrid.set_tile()` change replaced its entire `StaticBody2D` collision chunk even when the edit preserved the tile's solid/non-solid state. The OMNI working copy now queues only visual redraws for those edits; a real solidity transition still performs immediate full-chunk collision reconstruction. Batched terraforming similarly tracks geometry dirtiness separately from visual dirtiness. Godot native tests assert the existing collision-body identity remains stable for solid-to-solid and air-to-water edits, while air-to-solid and solid-to-air edits replace it as required.
+
+This is evidence of avoided unnecessary rebuild work and preserved immediate collision correctness, not measured FPS or a benchmarked speedup. Local Godot 4.7.2 validation passed 204 assertions / 0 failures. The changes have not been pushed to GitHub Actions or exercised on physical Android hardware.

@@ -12,8 +12,12 @@ var image: TextureRect
 
 func configure(biome: int) -> void:
 	layer = -20
-	follow_viewport_enabled = true
-	follow_viewport_scale = 0.14
+	# A following CanvasLayer scales all children, shrinking a full-screen
+	# TextureRect to 14% of the viewport. Keep the atmosphere in screen space.
+	# World-space camera parallax is supplied by the scene layers in the future;
+	# the backdrop itself must cover the entire Android landscape.
+	follow_viewport_enabled = false
+	follow_viewport_scale = 1.0
 	image = TextureRect.new()
 	image.name = "AtmosphericDepth"
 	image.texture = TEXTURES.get(biome, TEXTURES[0])

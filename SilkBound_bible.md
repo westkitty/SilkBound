@@ -88,3 +88,24 @@ Policy: append new dated entries; do not erase history.
 **QQQ repair / regression:** `WorldGrid.setup` failed to clear previous mining-crack and scanner transient state on reuse; this was corrected and guarded. Scanner focus changes have cross-chunk move/expiry tests, exact resource count and bearing assertions, editor import, smoke and APK build. No dependency, config, save-schema or canonical Starsilk additions.
 
 **Deferred:** physical-screen continuity after culling, Android low-end FPS/p95 frame times, memory, battery and thermal profiling, long-session resource lifecycle, bounded collision-chunk rebuild cost during repeated mining, save/load on-device, all procedures in `docs/ANDROID_FIELD_TEST.md`. Do not merge draft PR #2 until material hardware findings are accepted or repaired. Documentation closeout commit recorded separately by Git history.
+
+
+## 2026-10-12 — OMNI local stability and performance pass (NOT PUSHED)
+
+- **Baseline:** draft PR #2 branch at d4028018cc9197b222daeb6242d7463f289df5c5, main at a8c896cc6e9181b84f63fee939eed26c8687eb65. Existing GitHub Android CI was green.
+- **Scope:** keep original non-canon Starsilk premise, original assets, planet seeds, item economy, rescue narrative, live touch pointers, full physics collisions and save schema intact. No external dependencies or content reboots.
+- **Terrain:** distinguish visual-only tile changes from true solidity transitions. Same-solidity edits update terrain and redraw visuals while preserving the existing collision body; solid/air transitions still rebuild physics synchronously. Batched terraforming dirties collision only when required. Extra deterministic tests prove both paths.
+- **Save integrity:** a valid staged `.json.tmp` can restore progress only if both primary and backup are unreadable, preserving primary > backup > staged recovery precedence. No save format changes. Test simulates interruption after complete temporary write before atomic rename, then proves normal commits resume.
+- **Validation:** pinned Godot 4.7.2 installed in Big Mac temporary cache for local verification; full `tools/validate_project.sh` import, 204 assertions / 0 failures, startup smoke, and `tests/test_validate_project.sh` passed. Test runner now drains twelve deferred teardown frames before quit; removes previously observed local ObjectDB/resources-at-exit diagnostics without hiding fatal errors.
+- **Boundaries:** no Android device, emulator, APK export or new CI run for the local changes; no FPS uplift claim, no source commit/push, no PR merge. Physical field test checklist remains mandatory before calling the app release-ready.
+- **Working directory:** `/Users/bigmac/SilkBound-OMNI` on user-owned Big Mac. Review only attributable files before any later Git delivery; Godot generated .uid/.import sidecars remain untracked and are not part of the intended patch.
+
+## 2026-10-12 — OMNI / VISUAL staged-delivery candidate
+
+- **Purpose:** preserve the existing Starsilk non-canon playable sandbox; repair visual asset identity and integration rather than replacing the game or its character designs.
+- **Runtime discovery:** the three already-authored atmosphere PNGs displayed as undersized floating patches due to `CanvasLayer.follow_viewport_scale=0.14`. Corrected to full screen in the existing renderer; verified by 1280x720 Godot GUI captures.
+- **Terrain art:** 4 deterministic, per-ID 16px variations with stronger geological shapes and contrasting copper, glass and silicate. Atlas first-group ID offsets and saved terrain schema are retained. World drawing picks reproducible variation; physics changes from earlier OMNI work remain respected.
+- **Icons:** 27 semantically distinct 16px pictograms, 3 unique formerly reused upgrade indices, connected to real item pickup, inventory, crafting and touch hotbar render paths. Godot screenshot of inventory and HUD confirms scaled icon readability.
+- **Preserved:** procedural seed state, resource economy, ship repair/travel, original player/NPC/enemy animation sheets, source assets, audio, touch-pointer ownership, save schema and collision fidelity. No new external asset or library; standard-library generator remains reproducible.
+- **Validation:** Godot 4.7.2 macOS import, `tools/validate_project.sh` PASS with 204 assertions / 0 failures and startup smoke; native GUI captured inventory plus all three planets at 1280x720. `git diff --check` passed. No physical Android evidence, measured FPS uplift, new APK/export CI proof or PR merge is claimed by this source record.
+- **Git scope:** update only 15 attributable source/data/documentation files; Godot-generated `.import` and `.uid` sidecars are intentionally left untracked. Commit/push evidence belongs to Git history/Actions and must be checked separately.

@@ -30,6 +30,7 @@ var collision_chunks: Dictionary = {}
 var spawn_cell := Vector2i(10, 20)
 var _batching := false
 var _dirty_chunks: Dictionary = {}
+var _dirty_collision_chunks: Dictionary = {}
 var fault_warning_phase := 0
 var _environment_revision := 0
 var _sampled_revision := -1
@@ -68,6 +69,7 @@ func setup(
 	_scan_highlight_chunks.clear()
 	scan_redraw_request_count = 0
 	_dirty_chunks.clear()
+	_dirty_collision_chunks.clear()
 	for raw_index in saved_modifications.keys():
 		var index_text := String(raw_index)
 		if not index_text.is_valid_int():
@@ -170,7 +172,8 @@ func set_tile(x: int, y: int, tile_id: int) -> bool:
 		return false
 	var index := cell_index(x, y)
 	var key := str(index)
-	if get_tile(x, y) == tile_id:
+	var previous_tile := get_tile(x, y)
+	if previous_tile == tile_id or tile_id < Tiles.Tile.AIR or tile_id > Tiles.Tile.FAULT:
 		return false
 	if tile_id == int(base_cells[index]):
 		modifications.erase(key)
@@ -179,7 +182,7 @@ func set_tile(x: int, y: int, tile_id: int) -> bool:
 	_resolved_cells[index] = tile_id
 	cracks.erase(index)
 	_environment_revision += 1
-	_refresh_cell(x, y)
+	_refresh_cell(x, y, Tiles.is_solid(previous_tile) != Tiles.is_solid(tile_id))
 	return true
 
 
@@ -431,6 +434,11 @@ func serialize_meta() -> Dictionary:
 func _set_tile_batched(x: int, y: int, tile_id: int) -> void:
 	if x < 0 or x >= world_width or y < 0 or y >= world_height:
 		return
+	if tile_id < Tiles.Tile.AIR or tile_id > Tiles.Tile.FAULT:
+		return
+	var previous_tile := get_tile(x, y)
+	if previous_tile == tile_id:
+		return
 	var index := cell_index(x, y)
 	var key := str(index)
 	if tile_id == int(base_cells[index]):
@@ -441,22 +449,34 @@ func _set_tile_batched(x: int, y: int, tile_id: int) -> void:
 	cracks.erase(index)
 	var chunk_index := int(x / CHUNK_WIDTH)
 	_dirty_chunks[chunk_index] = true
+	if Tiles.is_solid(previous_tile) != Tiles.is_solid(tile_id):
+		_dirty_collision_chunks[chunk_index] = true
 
 
-func _refresh_cell(x: int, _y: int) -> void:
+func _refresh_cell(x: int, _y: int, collision_changed: bool) -> void:
 	var chunk_index := int(x / CHUNK_WIDTH)
 	if _batching:
 		_dirty_chunks[chunk_index] = true
+		if collision_changed:
+			_dirty_collision_chunks[chunk_index] = true
 		return
-	_refresh_chunk(chunk_index)
+	if collision_changed:
+		_refresh_chunk(chunk_index)
+	elif chunk_views.has(chunk_index):
+		(chunk_views[chunk_index] as CanvasItem).queue_redraw()
 
 
 func _refresh_dirty_chunks() -> void:
 	if not _dirty_chunks.is_empty():
 		_environment_revision += 1
-	for chunk_index in _dirty_chunks.keys():
-		_refresh_chunk(int(chunk_index))
+	for raw_index in _dirty_chunks.keys():
+		var chunk_index := int(raw_index)
+		if _dirty_collision_chunks.has(chunk_index):
+			_refresh_chunk(chunk_index)
+		elif chunk_views.has(chunk_index):
+			(chunk_views[chunk_index] as CanvasItem).queue_redraw()
 	_dirty_chunks.clear()
+	_dirty_collision_chunks.clear()
 
 
 func update_visible_chunks(camera_x: float, viewport_world_width: float) -> void:

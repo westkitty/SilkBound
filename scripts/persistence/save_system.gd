@@ -70,7 +70,16 @@ static func load_slot(slot: String = "slot_01") -> Dictionary:
 	var backup := _read_save(primary + ".bak")
 	if bool(backup.get("ok", false)):
 		backup["recovered"] = true
+		backup["recovery_source"] = "backup"
 		return backup
+	# A process can terminate after flushing the new save, but before the
+	# final rename. Recover a complete staged generation only when neither
+	# the primary nor the last known-good backup can be read.
+	var staged := _read_save(primary + ".tmp")
+	if bool(staged.get("ok", false)):
+		staged["recovered"] = true
+		staged["recovery_source"] = "temporary"
+		return staged
 	return {
 		"ok": false, "data": {}, "reason": String(result.get("reason", "No local save exists."))
 	}

@@ -58,10 +58,15 @@ func _run() -> void:
 	await _test_tile_lookup_equivalence_and_benchmark()
 	await _test_visual_chunk_culling()
 	await _test_safe_reentry_placement()
+	await _test_collision_refresh_scope()
 	await _test_scanner_resource_coverage()
 	await _test_world_changes_and_terraforming()
 	_test_versioned_save_round_trip()
 	await _test_main_scene_startup_and_touch_signals()
+	# Godot may queue nested collision/scene frees for later frames. Do not
+	# quit the test tree while those resources are still pending.
+	for _frame in range(12):
+		await process_frame
 	print("SilkBound tests: %d assertions, %d failures" % [assertions, failures])
 	quit(1 if failures > 0 else 0)
 
@@ -269,6 +274,74 @@ func _test_safe_reentry_placement() -> void:
 		"landing recovery never constructs or erases terrain"
 	)
 	rescue_world.queue_free()
+	await process_frame
+
+
+func _test_collision_refresh_scope() -> void:
+	var terrain := WorldGrid.new()
+	root.add_child(terrain)
+	terrain.setup("collision-scope", 714220, Generator.Biome.ASHLANDS)
+	var x := 70
+	var deep_y := terrain.world_height - 3
+	var empty_y := terrain.surface_at(x) - 8
+	var chunk_index := int(x / WorldGrid.CHUNK_WIDTH)
+	var first_body: StaticBody2D = terrain.collision_chunks[chunk_index]
+	var original_tile := terrain.get_tile(x, deep_y)
+	_check(Tiles.is_solid(original_tile), "collision scope probe begins in solid bedrock")
+	_check(terrain.set_tile(x, deep_y, Tiles.Tile.REINFORCED), "solid material may be resurfaced")
+	_check(
+		terrain.collision_chunks[chunk_index] == first_body,
+		"solid-to-solid editing retains live physics shapes"
+	)
+	_check(
+		terrain.get_tile(x, deep_y) == Tiles.Tile.REINFORCED,
+		"visual-only tile edits still update resolved terrain"
+	)
+	_check(terrain.set_tile(x, deep_y, original_tile), "resurfaced tile can be restored")
+	_check(
+		terrain.collision_chunks[chunk_index] == first_body,
+		"restoring solid material does not rebuild collision"
+	)
+	_check(not Tiles.is_solid(terrain.get_tile(x, empty_y)), "air probe begins unobstructed")
+	_check(terrain.set_tile(x, empty_y, Tiles.Tile.WATER), "open air can become water")
+	_check(
+		terrain.collision_chunks[chunk_index] == first_body,
+		"non-solid water edits do not rebuild physics shapes"
+	)
+	_check(terrain.set_tile(x, empty_y, Tiles.Tile.BRICK), "building adds a solid tile")
+	var second_body: StaticBody2D = terrain.collision_chunks[chunk_index]
+	_check(
+		second_body != first_body and is_instance_valid(second_body),
+		"non-solid-to-solid edits rebuild collision immediately"
+	)
+	_check(terrain.set_tile(x, empty_y, Tiles.Tile.AIR), "mining removes solid tiles")
+	var third_body: StaticBody2D = terrain.collision_chunks[chunk_index]
+	_check(
+		third_body != second_body and is_instance_valid(third_body),
+		"solid-to-air edits also rebuild collision immediately"
+	)
+	terrain._batching = true
+	terrain._set_tile_batched(x, deep_y, Tiles.Tile.GLASS)
+	terrain._set_tile_batched(x + 1, deep_y, Tiles.Tile.GLASS)
+	terrain._batching = false
+	terrain._refresh_dirty_chunks()
+	_check(
+		terrain.collision_chunks[chunk_index] == third_body,
+		"batched solid-only transformations preserve collision"
+	)
+	terrain._batching = true
+	terrain._set_tile_batched(x, empty_y, Tiles.Tile.BRICK)
+	terrain._batching = false
+	terrain._refresh_dirty_chunks()
+	_check(
+		terrain.collision_chunks[chunk_index] != third_body,
+		"batched solidity changes still rebuild the affected collision chunk"
+	)
+	_check(
+		terrain.collision_chunks.size() == terrain.chunk_views.size(),
+		"terrain collision chunks remain intact after mixed edits"
+	)
+	terrain.queue_free()
 	await process_frame
 
 
@@ -734,7 +807,76 @@ func _test_versioned_save_round_trip() -> void:
 		),
 		"re-saving recovered data preserves a second chance to restore the last good generation"
 	)
+	var competing_staged := FileAccess.open(
+		"user://saves/test_contract.json.tmp", FileAccess.WRITE
+	)
+	_check(competing_staged != null, "backup-priority fixture can stage newer uncommitted data")
+	if competing_staged != null:
+		competing_staged.store_string(
+			JSON.stringify({"version": Save.SAVE_VERSION, "data": newer_payload})
+		)
+		competing_staged.close()
+		var backup_priority := Save.load_slot("test_contract")
+		_check(
+			bool(backup_priority.get("ok", false))
+			and String(backup_priority.get("recovery_source", "")) == "backup"
+			and int(backup_priority["data"]["inventory"]["scrap"]) == 7,
+			"valid backup wins over newer uncommitted staged data"
+		)
 	Save.delete_slot("test_contract")
+	# Simulate a crash after writing the staged generation but before rename.
+	# The backup is absent, so this is the only valid remaining save.
+	Save.delete_slot("test_interrupted")
+	_check(
+		Save.save_slot(payload, "test_interrupted"),
+		"interrupted-save fixture starts with a complete primary generation"
+	)
+	var interrupted_primary := "user://saves/test_interrupted.json"
+	var staged_path := interrupted_primary + ".tmp"
+	var original_data := FileAccess.get_file_as_string(interrupted_primary)
+	var staged_file := FileAccess.open(staged_path, FileAccess.WRITE)
+	_check(staged_file != null, "interrupted-save fixture can write the staged generation")
+	if staged_file != null:
+		staged_file.store_string(original_data)
+		staged_file.flush()
+		staged_file.close()
+		var remove_result := DirAccess.remove_absolute(
+			ProjectSettings.globalize_path(interrupted_primary)
+		)
+		_check(remove_result == OK, "interrupted-save fixture can remove the uncommitted primary")
+		var recovered_staged := Save.load_slot("test_interrupted")
+		_check(
+			bool(recovered_staged.get("ok", false))
+			and bool(recovered_staged.get("recovered", false))
+			and String(recovered_staged.get("recovery_source", "")) == "temporary"
+			and int(recovered_staged["data"]["inventory"]["scrap"]) == 7,
+			"valid staged generation recovers when primary and backup are absent"
+		)
+		_check(
+			Save.save_slot(recovered_staged.get("data", {}), "test_interrupted"),
+			"recovered staged generation can be committed as a normal primary"
+		)
+		var committed_result := Save.load_slot("test_interrupted")
+		_check(
+			bool(committed_result.get("ok", false))
+			and not bool(committed_result.get("recovered", false)),
+			"recovered staged save resumes normal primary loading"
+		)
+		var stale_stage := FileAccess.open(staged_path, FileAccess.WRITE)
+		_check(stale_stage != null, "primary-priority fixture can create stale staged data")
+		if stale_stage != null:
+			stale_stage.store_string(
+				JSON.stringify({"version": Save.SAVE_VERSION, "data": newer_payload})
+			)
+			stale_stage.close()
+			var primary_priority := Save.load_slot("test_interrupted")
+			_check(
+				bool(primary_priority.get("ok", false))
+				and not bool(primary_priority.get("recovered", false))
+				and int(primary_priority["data"]["inventory"]["scrap"]) == 7,
+				"valid primary wins over stale staged data"
+			)
+	Save.delete_slot("test_interrupted")
 	_check(
 		not bool(Save.load_slot("../escape")["ok"]),
 		"invalid slot names are rejected before filesystem access"

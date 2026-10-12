@@ -60,3 +60,16 @@ Changes: resolved packed-array tile reads synchronized with edit/reload paths; s
 Verified targeted measurements: matched six-trial Godot headless tile-read median **47,681.5 µs reference -> 23,629.0 µs cached** for 106,496 queries; scanner request count **9 -> 1** on the tested local scan, and near-ship visible terrain chunks **9 -> 2** at a 1280px test viewport. These are implementation-specific, runner-specific metrics, not measured Android frame rates. Earlier one-shot tile timing fluctuated and is superseded by the paired method-call benchmark. Source and method in `docs/PERFORMANCE.md`.
 
 No new dependencies or visual assets; previously locked non-canon character/cosmology, progression gates, terrain save schema, and touch controls preserved in tested paths. Hardware visual/performance behavior remains unverified. PR #2 is intentionally still a draft; `main` unchanged.
+
+
+## 2026-10-12 — Local OMNI verification (uncommitted)
+
+The draft PR #2 source was cloned at d4028018 and inspected on Big Mac using a local Godot 4.7.2 editor. Two user-visible reliability improvements are implemented in the working copy: same-solidity mining/building/terraforming redraws no longer unnecessarily reconstruct physics chunks, and a complete staged save is recoverable when both the primary and backup are unreadable. The test runner now gives deferred Godot teardown twelve frames to finish, eliminating its observed local exit-resource diagnostics without relaxing the validator.
+
+Local `tools/validate_project.sh` passed import, **204 assertions / 0 failures**, and startup smoke. `tests/test_validate_project.sh` also passed. This does **not** establish an Android binary for these edits, a measured device frame-rate improvement, device touch behavior or complete manual playthrough. The local modifications are not committed or pushed. Continue treating PR #2 as a draft until hardware proof is recorded.
+
+## 2026-10-12 — OMNI visual asset candidate and delivery checks
+
+Local Big Mac GUI inspection exposed a concrete backdrop scaling defect: the authored planet environment appeared as a small centered patch. Corrected full-viewport rendering in the existing CanvasLayer, confirmed with 1280x720 captures of all three planets. Regenerated exactly two tracked art files: terrain atlas (four deterministic 16px visual variants per tile ID, stronger material identity) and item atlas (27 distinctive equipment/material pictograms). Item catalog indices for three upgrades and live inventory, fabrication and hotbar UI were updated; all other generated artwork and audio remained unchanged.
+
+Validation with Godot 4.7.2 on Big Mac: `tools/validate_project.sh` passed 204 assertions / 0 failures, import and startup smoke; graphical capture of the inventory panel confirmed expanded icons. CI-built Android APK for this source revision and physical touchscreen/thermal/performance QA must be verified separately. Work remains on draft PR #2's feature branch; no merge of main is authorized.

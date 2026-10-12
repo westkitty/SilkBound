@@ -30,6 +30,7 @@ var modal_title: Label
 var modal_rows: VBoxContainer
 var stick: VirtualStick
 var action_buttons: Array[TouchActionButton] = []
+var _item_icon_cache: Dictionary = {}
 var _panel_kind := ""
 var _last_refresh := 0.0
 
@@ -126,6 +127,10 @@ func show_inventory(rebuild: bool = true) -> void:
 					"use:" + item_id if usable else "",
 					not usable
 				)
+				var inventory_row := modal_rows.get_child(modal_rows.get_child_count() - 1) as Button
+				inventory_row.icon = _icon_for_item(item_id)
+				inventory_row.expand_icon = true
+				inventory_row.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_add_row("Close field inventory", "close", false)
 
 
@@ -143,6 +148,13 @@ func show_crafting() -> void:
 		var enabled := Crafting.can_craft(String(recipe_id), inventory)
 		var text := "%s   —   %s" % [String(recipe["name"]), ", ".join(cost_parts)]
 		_add_row(text, "craft:" + String(recipe_id), not enabled)
+		var outputs: Dictionary = recipe["output"]
+		if not outputs.is_empty():
+			var first_item_id := String(outputs.keys()[0])
+			var crafting_row := modal_rows.get_child(modal_rows.get_child_count() - 1) as Button
+			crafting_row.icon = _icon_for_item(first_item_id)
+			crafting_row.expand_icon = true
+			crafting_row.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_add_row("Close fabrication", "close", false)
 
 
@@ -474,8 +486,8 @@ func _build_hotbar() -> void:
 	container.anchor_right = 0.5
 	container.anchor_top = 1.0
 	container.anchor_bottom = 1.0
-	container.offset_left = -244
-	container.offset_right = 244
+	container.offset_left = -288
+	container.offset_right = 288
 	container.offset_top = -66
 	container.offset_bottom = -14
 	container.add_theme_constant_override("separation", 3)
@@ -483,11 +495,25 @@ func _build_hotbar() -> void:
 	root.add_child(container)
 	for index in range(8):
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(58, 52)
-		button.add_theme_font_size_override("font_size", 11)
+		button.custom_minimum_size = Vector2(68, 52)
+		button.add_theme_font_size_override("font_size", 12)
+		button.add_theme_constant_override("h_separation", 2)
 		button.pressed.connect(_on_panel_action.bind("hotbar:%d" % index))
 		container.add_child(button)
 		hotbar_buttons.append(button)
+
+
+func _icon_for_item(item_id: String) -> Texture2D:
+	if not Items.ITEMS.has(item_id):
+		return null
+	if _item_icon_cache.has(item_id):
+		return _item_icon_cache[item_id]
+	var atlas := AtlasTexture.new()
+	atlas.atlas = ItemIcons
+	var icon_index := int(Items.ITEMS[item_id]["icon"])
+	atlas.region = Rect2((icon_index % 8) * 16, int(icon_index / 8) * 16, 16, 16)
+	_item_icon_cache[item_id] = atlas
+	return atlas
 
 
 func _update_hotbar_buttons() -> void:
@@ -498,13 +524,20 @@ func _update_hotbar_buttons() -> void:
 	var selected := int(game.get("selected_hotbar"))
 	for index in range(hotbar_buttons.size()):
 		if index >= hotbar.size():
+			hotbar_buttons[index].icon = null
 			hotbar_buttons[index].text = "%d   —" % (index + 1)
 			hotbar_buttons[index].disabled = true
 			continue
 		var item_id := String(hotbar[index])
 		var quantity := inventory.count(item_id) if inventory != null else 0
-		hotbar_buttons[index].text = "%d  %s ×%d" % [index + 1, Items.item_name(item_id), quantity]
-		hotbar_buttons[index].disabled = quantity <= 0
+		var button := hotbar_buttons[index]
+		button.icon = _icon_for_item(item_id)
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		button.text = "%d ×%d" % [index + 1, quantity]
+		button.tooltip_text = "%s · %d carried" % [Items.item_name(item_id), quantity]
+		button.disabled = quantity <= 0
 		hotbar_buttons[index].modulate = (
 			Color(0.45, 0.93, 0.89) if index == selected else Color.WHITE
 		)
@@ -694,7 +727,7 @@ func _add_row(text: String, action: String, disabled: bool) -> void:
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.add_theme_font_size_override("font_size", 16)
 	button.add_theme_color_override("font_color", Color(0.87, 0.94, 0.94))
-	button.add_theme_color_override("font_disabled_color", Color(0.47, 0.57, 0.62))
+	button.add_theme_color_override("font_disabled_color", Color(0.70, 0.80, 0.85))
 	button.pressed.connect(_on_panel_action.bind(action))
 	modal_rows.add_child(button)
 

@@ -161,21 +161,21 @@ const ITEMS := {
 	"thermal_lining":
 	{
 		"name": "Thermal lining",
-		"icon": 18,
+		"icon": 24,
 		"stack": 10,
 		"description": "A conventional suit layer that slows heat exposure near shear-glass."
 	},
 	"cargo_frame":
 	{
 		"name": "Cargo frame",
-		"icon": 16,
+		"icon": 25,
 		"stack": 10,
 		"description": "An installable rack that expands local stack capacity."
 	},
 	"scanner_lens":
 	{
 		"name": "Scanner lens",
-		"icon": 20,
+		"icon": 26,
 		"stack": 10,
 		"description": "A copper-and-glass optic that widens the scanner sweep."
 	},

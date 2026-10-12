@@ -3,6 +3,8 @@ extends Node2D
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
 const TILE_SIZE := 32
 const ATLAS_COLUMNS := 8
+const ATLAS_VARIANTS := 4
+const ATLAS_VARIANT_STRIDE := 22
 const TEXTURE := preload("res://assets/tiles/terrain_atlas.png")
 const SCAN_COLORS := {
 	"ferrite": Color(0.19, 0.84, 0.91, 0.82),
@@ -37,14 +39,22 @@ func _draw() -> void:
 	var cracks: Dictionary = grid.get("cracks")
 	var highlights: Dictionary = grid.get("scan_highlights")
 	var phase := int(grid.get("fault_warning_phase"))
+	var variation_seed := int(grid.get("world_seed")) & 3
 	var preview_active := int(grid.get("biome")) == 1 and phase in [1, 2]
 	for y in range(world_height):
 		for x in range(first_x, end_x):
 			var tile_id := int(grid.call("get_tile", x, y))
 			if tile_id == Tiles.Tile.AIR:
 				continue
+			# Four deterministic visual variants preserve game logic, tile IDs,
+			# serialized edits, collisions and the first atlas group's offsets.
+			var variant := (x * 13 + y * 7 + (x >> 2) * (y >> 2) * 3 + variation_seed) & 3
+			var visual_index := tile_id + variant * ATLAS_VARIANT_STRIDE
 			var source := Rect2(
-				(tile_id % ATLAS_COLUMNS) * 16, int(tile_id / ATLAS_COLUMNS) * 16, 16, 16
+				(visual_index % ATLAS_COLUMNS) * 16,
+				int(visual_index / ATLAS_COLUMNS) * 16,
+				16,
+				16
 			)
 			var destination := Rect2((x - first_x) * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 			var tint := Color.WHITE
