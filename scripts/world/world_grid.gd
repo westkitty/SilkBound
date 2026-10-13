@@ -5,6 +5,8 @@ const Generator = preload("res://scripts/world/planet_generator.gd")
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
 const CHUNK_WIDTH := 32
 const TILE_SIZE := 32
+const GLASSFALL_FAULT_X := 62
+const GLASSFALL_FAULT_RADIUS := 7
 
 var planet_id: String = "ashlands"
 var biome: int = Generator.Biome.ASHLANDS
@@ -12,16 +14,30 @@ var world_seed: int = 0
 var world_width: int = 0
 var world_height: int = 0
 var base_cells := PackedInt32Array()
+# Resolved tile IDs avoid string allocation/hash lookup in drawing and collision hot paths.
+var _resolved_cells := PackedInt32Array()
 var surface_heights := PackedInt32Array()
 var structures: Array = []
 var modifications: Dictionary = {}
 var cracks: Dictionary = {}
 var scan_highlights: Dictionary = {}
+var _scan_highlight_chunks: Dictionary = {}
+var scan_redraw_request_count := 0
+var _visible_first_chunk := -1
+var _visible_last_chunk := -1
 var chunk_views: Dictionary = {}
 var collision_chunks: Dictionary = {}
 var spawn_cell := Vector2i(10, 20)
 var _batching := false
 var _dirty_chunks: Dictionary = {}
+var _dirty_collision_chunks: Dictionary = {}
+var fault_warning_phase := 0
+var _environment_revision := 0
+var _sampled_revision := -1
+var _sampled_cell := Vector2i(-9999, -9999)
+var _sampled_shelter := false
+var _sampled_thermal := false
+var environment_sample_count := 0
 
 
 func setup(
@@ -34,14 +50,26 @@ func setup(
 	planet_id = id
 	world_seed = seed_value
 	biome = biome_value
+	fault_warning_phase = 0
+	_environment_revision = 0
+	_sampled_revision = -1
+	_sampled_cell = Vector2i(-9999, -9999)
+	environment_sample_count = 0
 	var generated := Generator.generate(seed_value, biome_value)
 	world_width = int(generated["width"])
 	world_height = int(generated["height"])
 	base_cells = generated["cells"]
+	_resolved_cells = base_cells.duplicate()
 	surface_heights = generated["surface"]
 	structures = generated["structures"]
 	spawn_cell = generated["spawn"]
 	modifications.clear()
+	cracks.clear()
+	scan_highlights.clear()
+	_scan_highlight_chunks.clear()
+	scan_redraw_request_count = 0
+	_dirty_chunks.clear()
+	_dirty_collision_chunks.clear()
 	for raw_index in saved_modifications.keys():
 		var index_text := String(raw_index)
 		if not index_text.is_valid_int():
@@ -55,6 +83,7 @@ func setup(
 			and tile_id <= Tiles.Tile.FAULT
 		):
 			modifications[index_text] = tile_id
+			_resolved_cells[index] = tile_id
 	var saved_spawn: Variant = saved_meta.get("spawn", [])
 	if saved_spawn is Array and saved_spawn.size() >= 2:
 		var x := int(saved_spawn[0])
@@ -69,11 +98,7 @@ func get_tile(x: int, y: int) -> int:
 		return Tiles.Tile.BASALT
 	if y >= world_height:
 		return Tiles.Tile.BASALT
-	var index := y * world_width + x
-	var key := str(index)
-	if modifications.has(key):
-		return int(modifications[key])
-	return int(base_cells[index])
+	return int(_resolved_cells[y * world_width + x])
 
 
 func cell_index(x: int, y: int) -> int:
@@ -99,18 +124,65 @@ func get_tile_world(point: Vector2) -> int:
 	return get_tile(cell.x, cell.y)
 
 
+func captain_space_clear(point: Vector2) -> bool:
+	# Bounds for the existing 18x38 character capsule. Inspect saved tiles,
+	# including constructed walls; do not change the generated terrain.
+	if not point.is_finite():
+		return false
+	var low := world_to_cell(point - Vector2(10.0, 18.0))
+	var high := world_to_cell(point + Vector2(10.0, 18.0))
+	for y in range(low.y, high.y + 1):
+		for x in range(low.x, high.x + 1):
+			if Tiles.is_solid(get_tile(x, y)):
+				return false
+	return true
+
+
+func safe_reentry_position(preferred: Vector2, fallback: Vector2) -> Vector2:
+	if captain_space_clear(preferred):
+		return preferred
+	# Recheck the actual modified landscape; prefer the same neighborhood
+	# and fall back to a near-ship shelf only if local ground is obstructed.
+	for raw_anchor in [preferred, fallback]:
+		var anchor: Vector2 = raw_anchor
+		if not anchor.is_finite():
+			continue
+		var origin_x := world_to_cell(anchor).x
+		for radius in range(16):
+			var candidates: Array[int] = [origin_x]
+			if radius > 0:
+				candidates = [origin_x - radius, origin_x + radius]
+			for x in candidates:
+				if x < 1 or x >= world_width - 1:
+					continue
+				var ground_y := surface_at(x)
+				if not Tiles.is_solid(get_tile(x, ground_y)):
+					continue
+				for rise in range(2, 6):
+					var candidate := cell_to_world(Vector2i(x, ground_y - rise))
+					if captain_space_clear(candidate):
+						return candidate
+	if captain_space_clear(fallback):
+		return fallback
+	return preferred
+
+
 func set_tile(x: int, y: int, tile_id: int) -> bool:
 	if x < 0 or x >= world_width or y < 0 or y >= world_height:
 		return false
 	var index := cell_index(x, y)
 	var key := str(index)
-	if get_tile(x, y) == tile_id:
+	var previous_tile := get_tile(x, y)
+	if previous_tile == tile_id or tile_id < Tiles.Tile.AIR or tile_id > Tiles.Tile.FAULT:
 		return false
 	if tile_id == int(base_cells[index]):
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
-	_refresh_cell(x, y)
+	_resolved_cells[index] = tile_id
+	cracks.erase(index)
+	_environment_revision += 1
+	_refresh_cell(x, y, Tiles.is_solid(previous_tile) != Tiles.is_solid(tile_id))
 	return true
 
 
@@ -192,6 +264,8 @@ func apply_terraform(center_x: int, radius: int = 6) -> Dictionary:
 
 func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 	var origin := world_to_cell(center)
+	var radius := maxi(0, radius_cells)
+	var radius_squared := radius * radius
 	var counts := {
 		"ore": 0,
 		"ferrite": 0,
@@ -204,14 +278,15 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 		"fiber": 0,
 		"fault": 0
 	}
-	scan_highlights.clear()
-	for y in range(
-		maxi(0, origin.y - radius_cells), mini(world_height, origin.y + radius_cells + 1)
-	):
-		for x in range(
-			maxi(0, origin.x - radius_cells), mini(world_width, origin.x + radius_cells + 1)
-		):
-			if Vector2(x - origin.x, y - origin.y).length() > float(radius_cells):
+	var nearest: Dictionary = {}
+	var next_highlights: Dictionary = {}
+	var next_chunks: Dictionary = {}
+	for y in range(maxi(0, origin.y - radius), mini(world_height, origin.y + radius + 1)):
+		for x in range(maxi(0, origin.x - radius), mini(world_width, origin.x + radius + 1)):
+			var dx := x - origin.x
+			var dy := y - origin.y
+			var distance_squared := dx * dx + dy * dy
+			if distance_squared > radius_squared:
 				continue
 			var tile_id := get_tile(x, y)
 			var category := ""
@@ -239,16 +314,41 @@ func scan_area(center: Vector2, radius_cells: int = 9) -> Dictionary:
 			counts[category] = int(counts[category]) + 1
 			if category in ["ferrite", "copper", "crystal"]:
 				counts["ore"] = int(counts["ore"]) + 1
-			if (
-				category
-				in [
-					"ferrite", "copper", "crystal", "wreckage", "glass", "archive", "fiber", "fault"
-				]
-			):
-				scan_highlights[str(cell_index(x, y))] = category
-	for chunk in chunk_views.values():
-		(chunk as CanvasItem).queue_redraw()
+			var previous: Dictionary = nearest.get(category, {})
+			if previous.is_empty() or distance_squared < int(previous["distance_squared"]):
+				nearest[category] = {
+					"x": x, "y": y, "distance_squared": distance_squared
+				}
+			if category in [
+				"ferrite", "copper", "crystal", "wreckage", "glass", "archive", "fiber", "fault"
+			]:
+				next_highlights[str(cell_index(x, y))] = category
+				next_chunks[int(x / CHUNK_WIDTH)] = true
+	counts["nearest"] = nearest
+	# Only paint chunks whose scan overlay changed; an identical rescan draws nothing.
+	if next_highlights != scan_highlights:
+		var changed_chunks := _scan_highlight_chunks.duplicate()
+		for chunk_index in next_chunks.keys():
+			changed_chunks[chunk_index] = true
+		scan_highlights = next_highlights
+		_scan_highlight_chunks = next_chunks
+		_request_scan_redraw(changed_chunks)
 	return counts
+
+
+func clear_scan_highlights() -> void:
+	if scan_highlights.is_empty():
+		return
+	scan_highlights.clear()
+	_request_scan_redraw(_scan_highlight_chunks)
+	_scan_highlight_chunks.clear()
+
+
+func _request_scan_redraw(chunks: Dictionary) -> void:
+	for chunk_index in chunks.keys():
+		if chunk_views.has(chunk_index):
+			(chunk_views[chunk_index] as CanvasItem).queue_redraw()
+			scan_redraw_request_count += 1
 
 
 func is_underwater(world_position: Vector2) -> bool:
@@ -259,30 +359,63 @@ func is_underwater(world_position: Vector2) -> bool:
 
 
 func is_thermal_zone(world_position: Vector2) -> bool:
-	var cell := world_to_cell(world_position)
-	if biome != Generator.Biome.GLASSFALL:
-		return false
-	for y in range(cell.y - 1, cell.y + 2):
-		for x in range(cell.x - 1, cell.x + 2):
-			if get_tile(x, y) == Tiles.Tile.FAULT:
-				return true
-	return false
+	_sample_environment(world_to_cell(world_position))
+	return _sampled_thermal
 
 
 func is_sheltered(world_position: Vector2) -> bool:
-	var cell := world_to_cell(world_position)
+	_sample_environment(world_to_cell(world_position))
+	return _sampled_shelter
+
+
+func _sample_environment(cell: Vector2i) -> void:
+	# The HUD consults both hazards every frame. Reuse one bounded sample until
+	# movement or a real terrain edit changes the answer.
+	if cell == _sampled_cell and _sampled_revision == _environment_revision:
+		return
+	_sampled_cell = cell
+	_sampled_revision = _environment_revision
+	environment_sample_count += 1
+	_sampled_thermal = false
+	if biome == Generator.Biome.GLASSFALL:
+		for y in range(cell.y - 1, cell.y + 2):
+			for x in range(cell.x - 1, cell.x + 2):
+				if get_tile(x, y) == Tiles.Tile.FAULT:
+					_sampled_thermal = true
+					break
+			if _sampled_thermal:
+				break
 	var walls := 0
 	var floor_found := false
+	var nearby_lamp := false
 	for y in range(maxi(0, cell.y - 4), mini(world_height, cell.y + 5)):
 		for x in range(maxi(0, cell.x - 5), mini(world_width, cell.x + 6)):
 			var tile_id := get_tile(x, y)
+			if tile_id == Tiles.Tile.LAMP:
+				nearby_lamp = true
+				break
 			if tile_id in [Tiles.Tile.WALL, Tiles.Tile.REINFORCED, Tiles.Tile.BRICK]:
 				walls += 1
 			if tile_id in [Tiles.Tile.FLOOR, Tiles.Tile.BRICK]:
 				floor_found = true
-			if tile_id == Tiles.Tile.LAMP:
-				return true
-	return walls >= 3 and floor_found
+		if nearby_lamp:
+			break
+	_sampled_shelter = nearby_lamp or (walls >= 3 and floor_found)
+
+
+func set_fault_warning_phase(next_phase: int) -> void:
+	if biome != Generator.Biome.GLASSFALL:
+		return
+	var phase_value := clampi(next_phase, 0, 3)
+	if fault_warning_phase == phase_value:
+		return
+	fault_warning_phase = phase_value
+	# Preview art changes; no collision rebuild or terrain edit is required.
+	var first_chunk := int((GLASSFALL_FAULT_X - GLASSFALL_FAULT_RADIUS) / CHUNK_WIDTH)
+	var last_chunk := int((GLASSFALL_FAULT_X + GLASSFALL_FAULT_RADIUS) / CHUNK_WIDTH)
+	for index in range(first_chunk, last_chunk + 1):
+		if chunk_views.has(index):
+			(chunk_views[index] as CanvasItem).queue_redraw()
 
 
 func has_tile_near(world_position: Vector2, tile_id: int, radius: int = 3) -> bool:
@@ -301,28 +434,68 @@ func serialize_meta() -> Dictionary:
 func _set_tile_batched(x: int, y: int, tile_id: int) -> void:
 	if x < 0 or x >= world_width or y < 0 or y >= world_height:
 		return
+	if tile_id < Tiles.Tile.AIR or tile_id > Tiles.Tile.FAULT:
+		return
+	var previous_tile := get_tile(x, y)
+	if previous_tile == tile_id:
+		return
 	var index := cell_index(x, y)
 	var key := str(index)
 	if tile_id == int(base_cells[index]):
 		modifications.erase(key)
 	else:
 		modifications[key] = tile_id
+	_resolved_cells[index] = tile_id
+	cracks.erase(index)
 	var chunk_index := int(x / CHUNK_WIDTH)
 	_dirty_chunks[chunk_index] = true
+	if Tiles.is_solid(previous_tile) != Tiles.is_solid(tile_id):
+		_dirty_collision_chunks[chunk_index] = true
 
 
-func _refresh_cell(x: int, _y: int) -> void:
+func _refresh_cell(x: int, _y: int, collision_changed: bool) -> void:
 	var chunk_index := int(x / CHUNK_WIDTH)
 	if _batching:
 		_dirty_chunks[chunk_index] = true
+		if collision_changed:
+			_dirty_collision_chunks[chunk_index] = true
 		return
-	_refresh_chunk(chunk_index)
+	if collision_changed:
+		_refresh_chunk(chunk_index)
+	elif chunk_views.has(chunk_index):
+		(chunk_views[chunk_index] as CanvasItem).queue_redraw()
 
 
 func _refresh_dirty_chunks() -> void:
-	for chunk_index in _dirty_chunks.keys():
-		_refresh_chunk(int(chunk_index))
+	if not _dirty_chunks.is_empty():
+		_environment_revision += 1
+	for raw_index in _dirty_chunks.keys():
+		var chunk_index := int(raw_index)
+		if _dirty_collision_chunks.has(chunk_index):
+			_refresh_chunk(chunk_index)
+		elif chunk_views.has(chunk_index):
+			(chunk_views[chunk_index] as CanvasItem).queue_redraw()
 	_dirty_chunks.clear()
+	_dirty_collision_chunks.clear()
+
+
+func update_visible_chunks(camera_x: float, viewport_world_width: float) -> void:
+	# Keep a full chunk of camera-smoothing margin on both sides.
+	# Collision chunks remain active; only distant artwork is hidden.
+	if chunk_views.is_empty() or not is_finite(camera_x):
+		return
+	var chunk_span := float(CHUNK_WIDTH * TILE_SIZE)
+	var half_view := maxf(0.0, viewport_world_width) * 0.5 + chunk_span
+	var first := clampi(floori((camera_x - half_view) / chunk_span), 0, chunk_views.size() - 1)
+	var last := clampi(floori((camera_x + half_view) / chunk_span), first, chunk_views.size() - 1)
+	if first == _visible_first_chunk and last == _visible_last_chunk:
+		return
+	_visible_first_chunk = first
+	_visible_last_chunk = last
+	for raw_index in chunk_views.keys():
+		var index := int(raw_index)
+		var chunk: CanvasItem = chunk_views[raw_index]
+		chunk.visible = index >= first and index <= last
 
 
 func _refresh_chunk(chunk_index: int) -> void:
@@ -362,6 +535,8 @@ func _refresh_chunk(chunk_index: int) -> void:
 
 
 func _build_chunks() -> void:
+	_visible_first_chunk = -1
+	_visible_last_chunk = -1
 	for node in chunk_views.values():
 		if is_instance_valid(node):
 			node.queue_free()

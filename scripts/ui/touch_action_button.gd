@@ -16,6 +16,20 @@ func configure(action: String, text: String) -> void:
 	queue_redraw()
 
 
+func release_pointer(pointer_id: int) -> bool:
+	if not active_pointers.has(pointer_id):
+		return false
+	active_pointers.erase(pointer_id)
+	action_released.emit(action_name, pointer_id)
+	queue_redraw()
+	return true
+
+
+func cancel_input() -> void:
+	for pointer_id in active_pointers.keys():
+		release_pointer(int(pointer_id))
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var pointer_id := int(event.index)
@@ -24,21 +38,17 @@ func _gui_input(event: InputEvent) -> void:
 				active_pointers[pointer_id] = true
 				action_pressed.emit(action_name, pointer_id)
 		else:
-			if active_pointers.has(pointer_id):
-				active_pointers.erase(pointer_id)
-				action_released.emit(action_name, pointer_id)
-			queue_redraw()
+			release_pointer(pointer_id)
 		accept_event()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var pointer_id := -1
 		if event.pressed:
-			active_pointers[pointer_id] = true
-			action_pressed.emit(action_name, pointer_id)
+			if not active_pointers.has(pointer_id):
+				active_pointers[pointer_id] = true
+				action_pressed.emit(action_name, pointer_id)
+				queue_redraw()
 		else:
-			if active_pointers.has(pointer_id):
-				active_pointers.erase(pointer_id)
-				action_released.emit(action_name, pointer_id)
-		queue_redraw()
+			release_pointer(pointer_id)
 		accept_event()
 	elif event is InputEventScreenDrag and active_pointers.has(int(event.index)):
 		accept_event()
@@ -61,6 +71,6 @@ func _draw() -> void:
 			caption,
 			HORIZONTAL_ALIGNMENT_CENTER,
 			size.x,
-			15,
+			clampi(roundi(15.0 * minf(1.45, size.x / 62.0)), 15, 22),
 			Color(0.91, 0.97, 0.97)
 		)

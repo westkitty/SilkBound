@@ -101,7 +101,7 @@ TILE_COLORS = {
     2: ((106, 83, 70, 255), (143, 111, 86, 255), (61, 57, 65, 255)),
     3: ((48, 55, 69, 255), (78, 85, 101, 255), (29, 38, 57, 255)),
     4: ((61, 70, 83, 255), (229, 171, 83, 255), (28, 37, 51, 255)),
-    5: ((65, 67, 79, 255), (75, 207, 205, 255), (32, 43, 57, 255)),
+    5: ((72, 62, 70, 255), (235, 132, 78, 255), (33, 36, 52, 255)),
     6: ((57, 68, 82, 255), (164, 182, 190, 255), (26, 39, 54, 255)),
     7: ((30, 34, 49, 255), (124, 71, 94, 255), (13, 19, 34, 255)),
     8: ((47, 49, 83, 255), (112, 185, 207, 255), (27, 31, 57, 255)),
@@ -122,54 +122,180 @@ TILE_COLORS = {
 
 
 def make_tile_atlas():
-    tile_size, columns, rows = 16, 8, 3
-    img = canvas(tile_size * columns, tile_size * rows)
-    for tile_id in range(1, 22):
-        ox, oy = (tile_id % columns) * tile_size, (tile_id // columns) * tile_size
-        base, highlight, shadow = TILE_COLORS[tile_id]
-        for y in range(tile_size):
-            for x in range(tile_size):
-                edge = y == 0 or x == 0
-                put(img, ox + x, oy + y, highlight if edge and tile_id not in (9,) else base)
-        rng = random.Random(tile_id * 817)
-        for _ in range(13):
-            x, y = rng.randrange(2, 15), rng.randrange(2, 15)
-            put(img, ox + x, oy + y, highlight if rng.random() > 0.42 else shadow)
-        if tile_id in (4, 5, 8, 11, 17, 21):
-            line(img, ox + 4, oy + 12, ox + 8, oy + 5, highlight)
-            line(img, ox + 8, oy + 5, ox + 12, oy + 10, highlight)
-        elif tile_id == 9:
-            line(img, ox + 1, oy + 5, ox + 8, oy + 4, highlight)
-            line(img, ox + 8, oy + 4, ox + 15, oy + 6, highlight)
-            line(img, ox + 2, oy + 11, ox + 12, oy + 10, shadow)
-        elif tile_id == 12:
-            line(img, ox + 8, oy + 15, ox + 8, oy + 3, highlight)
-            line(img, ox + 8, oy + 9, ox + 4, oy + 6, highlight)
-            line(img, ox + 8, oy + 11, ox + 12, oy + 7, highlight)
-        elif tile_id in (14, 15, 20):
-            rect(img, ox + 2, oy + 2, 12, 2, highlight)
-            line(img, ox + 3, oy + 6, ox + 3, oy + 14, shadow)
-        elif tile_id == 16:
-            rect(img, ox + 4, oy + 2, 8, 13, base)
-            rect(img, ox + 6, oy + 4, 1, 10, highlight)
-            put(img, ox + 10, oy + 9, highlight)
-        elif tile_id == 17:
-            rect(img, ox + 6, oy + 2, 4, 5, highlight)
-            rect(img, ox + 7, oy + 8, 2, 6, shadow)
-            line(img, ox + 3, oy + 5, ox + 1, oy + 3, highlight)
-            line(img, ox + 12, oy + 5, ox + 14, oy + 3, highlight)
-        elif tile_id == 18:
-            rect(img, ox + 2, oy + 3, 12, 10, base)
-            rect(img, ox + 7, oy + 3, 2, 10, highlight)
-            rect(img, ox + 2, oy + 7, 12, 2, shadow)
-        elif tile_id == 19:
-            rect(img, ox + 2, oy + 9, 12, 3, highlight)
-            rect(img, ox + 4, oy + 12, 2, 3, shadow)
-            rect(img, ox + 10, oy + 12, 2, 3, shadow)
-        elif tile_id == 21:
-            line(img, ox + 7, oy, ox + 9, oy + 5, highlight)
-            line(img, ox + 9, oy + 5, ox + 5, oy + 9, highlight)
-            line(img, ox + 5, oy + 9, ox + 10, oy + 15, highlight)
+    """Four deterministically varied, ID-stable 16px material tiles.
+
+    Tile ID 0 remains transparent. Variant groups use index
+    tile_id + 22 * variant, keeping the first group's existing atlas offsets
+    unchanged for crafting previews and preserving serialized tile IDs.
+    """
+    tile_size, columns, variants, stride = 16, 8, 4, 22
+    rows = math.ceil((stride * variants) / columns)
+    img = canvas(columns * tile_size, rows * tile_size)
+    for variant in range(variants):
+        for tile_id in range(1, 22):
+            index = tile_id + stride * variant
+            ox, oy = (index % columns) * tile_size, (index // columns) * tile_size
+            base, highlight, shadow = TILE_COLORS[tile_id]
+            rng = random.Random(tile_id * 1009 + variant * 7919)
+            # Natural materials avoid complete per-cell bevel borders.
+            if tile_id not in (12, 17, 19):
+                rect(img, ox, oy, 16, 16, base)
+
+            if tile_id in (1, 2, 3, 10):
+                # Localized strata, broken facets, cinders and mineral grains.
+                if tile_id == 3:
+                    for _ in range(3):
+                        x, y = rng.randrange(2, 12), rng.randrange(3, 13)
+                        polygon(img, [(ox + x, oy + y), (ox + x + 4, oy + y - 2),
+                                      (ox + x + 5, oy + y + 3)], shadow)
+                    line(img, ox + 2 + variant, oy + 11, ox + 6 + variant, oy + 7, highlight)
+                    line(img, ox + 6 + variant, oy + 7, ox + 11, oy + 10, shadow)
+                else:
+                    for _ in range(4):
+                        x, y = rng.randrange(0, 14), rng.randrange(2, 15)
+                        line(img, ox + x, oy + y, ox + min(15, x + rng.randrange(2, 5)),
+                             oy + y, shadow if rng.random() < 0.55 else highlight)
+                    for _ in range(5):
+                        put(img, ox + rng.randrange(16), oy + rng.randrange(16), shadow)
+                if tile_id == 1:
+                    rect(img, ox + 3 + variant, oy + 4, 3, 1, (178, 91, 70, 255))
+                elif tile_id == 2:
+                    line(img, ox + 1, oy + 12, ox + 7, oy + 13, (175, 133, 97, 255))
+                elif tile_id == 10:
+                    line(img, ox + 3, oy + 10, ox + 11, oy + 10, (116, 145, 130, 255))
+            elif tile_id in (4, 5):
+                # Veins are colored differently enough to read at phone scale:
+                # ferrite is golden iron; copper is orange conductive metal.
+                vein = (232, 168, 80, 255) if tile_id == 4 else (236, 126, 72, 255)
+                edge = (118, 84, 70, 255) if tile_id == 4 else (98, 63, 68, 255)
+                x = 3 + variant
+                polygon(img, [(ox + x, oy + 15), (ox + x + 2, oy + 10),
+                              (ox + x + 5, oy + 9), (ox + x + 7, oy + 3),
+                              (ox + x + 9, oy + 5), (ox + x + 7, oy + 11),
+                              (ox + x + 4, oy + 12), (ox + x + 3, oy + 15)], edge)
+                line(img, ox + x + 1, oy + 14, ox + x + 5, oy + 9, vein)
+                line(img, ox + x + 5, oy + 9, ox + x + 7, oy + 4, vein)
+                rect(img, ox + 10, oy + 2 + (variant % 3), 2, 2, highlight)
+                for _ in range(3):
+                    put(img, ox + rng.randrange(16), oy + rng.randrange(16), shadow)
+            elif tile_id == 6:
+                # Wreck plate, oblique brace and two distinct fasteners.
+                polygon(img, [(ox + 1, oy + 4), (ox + 13, oy + 1),
+                              (ox + 15, oy + 11), (ox + 3, oy + 14)], shadow)
+                line(img, ox + 3, oy + 5 + variant % 3, ox + 13, oy + 3, highlight)
+                line(img, ox + 4, oy + 12, ox + 13, oy + 8, (102, 130, 143, 255))
+                put(img, ox + 5, oy + 8, (208, 163, 95, 255))
+                put(img, ox + 12, oy + 5, (208, 163, 95, 255))
+            elif tile_id == 7:
+                # Faceted near-black volcanic glass with thin exposed fracture.
+                polygon(img, [(ox + 0, oy + 5), (ox + 9, oy + 0),
+                              (ox + 14, oy + 9), (ox + 7, oy + 15)],
+                        (39, 35, 60, 255))
+                polygon(img, [(ox + 7, oy + 3), (ox + 15, oy + 1),
+                              (ox + 13, oy + 12)], shadow)
+                line(img, ox + 6 + variant % 3, oy + 3,
+                     ox + 10 + variant % 3, oy + 10, (174, 89, 120, 255))
+                line(img, ox + 10 + variant % 3, oy + 10,
+                     ox + 8, oy + 14, (105, 55, 99, 255))
+            elif tile_id == 8:
+                # Refractive silicate prism, cyan body and navy facets.
+                polygon(img, [(ox + 3, oy + 6), (ox + 9, oy + 0),
+                              (ox + 15, oy + 9), (ox + 8, oy + 15)],
+                        (48, 109, 137, 255))
+                polygon(img, [(ox + 9, oy + 0), (ox + 15, oy + 9),
+                              (ox + 8, oy + 15)], (31, 63, 105, 255))
+                line(img, ox + 3, oy + 6, ox + 9, oy + 1, (145, 220, 233, 255))
+                line(img, ox + 9, oy + 1, ox + 12, oy + 8, (189, 237, 240, 255))
+            elif tile_id == 9:
+                # Partly translucent water, quiet short ripples and deep bands.
+                rect(img, ox, oy, 16, 16, (25, 73, 103, 200))
+                for y in (4, 10, 14):
+                    x = (variant * 3 + y) % 6
+                    line(img, ox + x, oy + y, ox + x + 7, oy + y,
+                         (103, 207, 211, 215) if y == 4 else (55, 150, 173, 190))
+                rect(img, ox + 2, oy + 7, 4, 1, (23, 62, 92, 220))
+            elif tile_id == 11:
+                # Cold Administration archive PCB; no sentient presence.
+                rect(img, ox + 2, oy + 1, 12, 14, (25, 46, 68, 255))
+                rect(img, ox + 4, oy + 3, 9, 3, (63, 151, 165, 255))
+                for dx in range(4):
+                    rect(img, ox + 4 + dx * 2, oy + 8, 1, 5 - dx % 2, highlight)
+                line(img, ox + 1, oy + 14, ox + 13, oy + 14, shadow)
+                put(img, ox + 12, oy + 12, (237, 178, 100, 255))
+            elif tile_id == 12:
+                # Sprouting resin growth; background remains transparent.
+                x = 7 + variant % 3
+                line(img, ox + x, oy + 15, ox + x, oy + 4, (63, 137, 90, 255))
+                line(img, ox + x, oy + 10, ox + x - 5, oy + 5, highlight)
+                line(img, ox + x, oy + 8, ox + x + 5, oy + 3, highlight)
+                polygon(img, [(ox + x - 6, oy + 5), (ox + x - 3, oy + 4),
+                              (ox + x - 3, oy + 9)], (128, 211, 128, 255))
+                polygon(img, [(ox + x + 3, oy + 3), (ox + x + 6, oy + 2),
+                              (ox + x + 4, oy + 7)], (96, 192, 135, 255))
+                rect(img, ox + x - 1, oy + 13, 3, 3, shadow)
+            elif tile_id == 13:
+                # Staggered salvaged bricks, deliberately modular.
+                rect(img, ox, oy, 16, 16, (71, 53, 54, 255))
+                rect(img, ox, oy + 1, 8 + (variant % 4), 6, (141, 89, 69, 255))
+                rect(img, ox + 9, oy + 1, 7, 6, (123, 78, 64, 255))
+                rect(img, ox + 1, oy + 9, 11, 6, (161, 105, 72, 255))
+                rect(img, ox + 13, oy + 9, 3, 6, (117, 78, 71, 255))
+                line(img, ox + 1, oy + 11, ox + 10, oy + 11, (179, 123, 91, 255))
+            elif tile_id in (14, 15, 20):
+                # Structural metal components: readable construction modules.
+                rect(img, ox + 1, oy + 1, 14, 14, shadow)
+                rect(img, ox + 2, oy + 2, 12, 11, base)
+                for x in (3, 12):
+                    put(img, ox + x, oy + 3, highlight)
+                    put(img, ox + x, oy + 12, highlight)
+                if tile_id == 14:
+                    line(img, ox + 4, oy + 7, ox + 11, oy + 7, highlight)
+                    rect(img, ox + 7, oy + 5, 2, 5, (28, 50, 68, 255))
+                elif tile_id == 15:
+                    rect(img, ox + 2, oy + 6, 12, 3, highlight)
+                    rect(img, ox + 4, oy + 9, 8, 2, (20, 47, 66, 255))
+                else:
+                    line(img, ox + 2, oy + 13, ox + 13, oy + 2, (203, 123, 93, 255))
+                    line(img, ox + 3, oy + 12, ox + 13, oy + 12, highlight)
+            elif tile_id == 16:
+                # Pressure door with vertical seam, handle, and control strip.
+                rect(img, ox + 3, oy, 10, 16, shadow)
+                rect(img, ox + 4, oy + 1, 8, 14, base)
+                rect(img, ox + 6, oy + 2, 1, 12, (139, 159, 169, 255))
+                rect(img, ox + 10, oy + 6, 2, 3, highlight)
+                line(img, ox + 4, oy + 14, ox + 11, oy + 14, (146, 168, 181, 255))
+            elif tile_id == 17:
+                # Survey lamp: compact exposed light above a slender mounting stem.
+                rect(img, ox + 6, oy + 8, 4, 7, shadow)
+                rect(img, ox + 7, oy + 8, 2, 6, highlight)
+                rect(img, ox + 3, oy + 3, 10, 6, (24, 56, 71, 255))
+                rect(img, ox + 5, oy + 2, 6, 5, (119, 236, 224, 255))
+                rect(img, ox + 6, oy + 2, 3, 2, (238, 251, 224, 255))
+            elif tile_id == 18:
+                rect(img, ox + 1, oy + 3, 14, 11, shadow)
+                rect(img, ox + 2, oy + 4, 12, 8, (141, 103, 72, 255))
+                line(img, ox + 3, oy + 4, ox + 12, oy + 12, highlight)
+                line(img, ox + 12, oy + 4, ox + 3, oy + 12, shadow)
+                rect(img, ox + 7, oy + 4, 3, 3, (227, 187, 111, 255))
+            elif tile_id == 19:
+                rect(img, ox + 1, oy + 6, 14, 4, highlight)
+                rect(img, ox + 2, oy + 5, 12, 3, (25, 52, 71, 255))
+                for x in (3, 12):
+                    rect(img, ox + x, oy + 10, 2, 6, shadow)
+                rect(img, ox + 6, oy + 3, 5, 3, (214, 163, 100, 255))
+                put(img, ox + 8, oy + 4, (126, 225, 216, 255))
+            elif tile_id == 21:
+                # Red shear glass; fractured material, not Starsilk or a portal.
+                polygon(img, [(ox + 0, oy + 5), (ox + 10, oy + 0),
+                              (ox + 15, oy + 10), (ox + 4, oy + 15)],
+                        (71, 32, 51, 255))
+                x = 6 + variant % 3
+                line(img, ox + x, oy, ox + x + 3, oy + 5, (252, 104, 119, 255))
+                line(img, ox + x + 3, oy + 5, ox + x - 2, oy + 11,
+                     (224, 66, 99, 255))
+                line(img, ox + x - 2, oy + 11, ox + x + 1, oy + 15,
+                     (252, 104, 119, 255))
+                rect(img, ox + 1, oy + 12, 3, 1, (117, 49, 71, 255))
     save_png(ROOT / "assets/tiles/terrain_atlas.png", img)
 
 
@@ -444,31 +570,196 @@ def make_backgrounds():
 
 
 def make_item_icons():
+    """Purpose-drawn pixel pictograms, matching ItemCatalog icon indices.
+
+    The existing 8-column, 16-pixel slot layout is unchanged, while the fourth
+    atlas row now distinguishes specialized upgrades from ordinary materials.
+    """
     img = canvas(128, 64)
-    palette = [
-        (174, 183, 187, 255), (207, 153, 92, 255), (79, 207, 204, 255),
-        (173, 105, 112, 255), (143, 112, 192, 255), (117, 197, 137, 255),
-        (218, 182, 113, 255), (93, 202, 218, 255), (226, 225, 204, 255),
-        (230, 113, 123, 255), (108, 142, 181, 255), (211, 174, 124, 255),
-        (84, 208, 191, 255), (197, 147, 88, 255), (160, 176, 184, 255),
-        (100, 227, 217, 255), (206, 163, 102, 255), (81, 134, 177, 255),
-        (211, 184, 112, 255), (110, 205, 200, 255), (206, 90, 105, 255),
-        (145, 189, 198, 255), (90, 174, 143, 255), (206, 111, 174, 255),
-    ]
-    for i in range(24):
-        ox, oy = (i % 8) * 16, (i // 8) * 16
-        col = palette[i]
-        rect(img, ox + 3, oy + 4, 10, 9, (18, 29, 45, 255))
-        rect(img, ox + 4, oy + 3, 8, 10, col)
-        rect(img, ox + 6, oy + 5, 3, 2, (235, 233, 207, 255))
-        if i % 4 == 0:
-            line(img, ox + 4, oy + 12, ox + 12, oy + 4, (246, 226, 169, 255))
-        elif i % 4 == 1:
-            rect(img, ox + 7, oy + 3, 2, 10, (37, 46, 61, 255))
-        elif i % 4 == 2:
-            ellipse(img, ox + 8, oy + 8, 4, 4, col, fill=False)
-        else:
-            put(img, ox + 12, oy + 4, (255, 226, 161, 255))
+    ink = (14, 24, 39, 255)
+    rim = (47, 67, 82, 255)
+    silver = (174, 194, 203, 255)
+    light = (238, 237, 216, 255)
+    cyan = (94, 220, 221, 255)
+    deep_blue = (43, 99, 132, 255)
+    copper = (229, 134, 83, 255)
+    amber = (226, 178, 100, 255)
+    burgundy = (168, 72, 91, 255)
+    green = (112, 201, 139, 255)
+
+    for index in range(27):
+        tile = canvas(16, 16)
+        if index == 0:  # Hull scrap: jagged clipped sheet with rivets.
+            polygon(tile, [(2, 4), (10, 2), (14, 7), (12, 13), (4, 14), (1, 10)], ink)
+            polygon(tile, [(3, 5), (10, 3), (12, 7), (10, 12), (4, 12)], silver)
+            line(tile, 4, 10, 11, 6, rim)
+            put(tile, 5, 6, amber)
+            put(tile, 10, 10, amber)
+        elif index == 1:  # Ferrite: chipped iron ore.
+            polygon(tile, [(2, 10), (5, 3), (11, 2), (15, 10), (9, 14), (3, 13)], ink)
+            polygon(tile, [(4, 10), (6, 4), (10, 4), (13, 10), (9, 12)], silver)
+            line(tile, 6, 11, 10, 6, amber)
+            put(tile, 11, 5, light)
+        elif index == 2:  # Copper: distinguishable warm coil.
+            rect(tile, 3, 4, 10, 9, ink)
+            for x in (4, 7, 10):
+                rect(tile, x, 5, 2, 7, copper)
+            line(tile, 2, 3, 13, 3, amber)
+            put(tile, 13, 13, light)
+        elif index == 3:  # Volcanic glass: fractured rose-black shard.
+            polygon(tile, [(8, 1), (14, 10), (8, 15), (2, 12)], ink)
+            polygon(tile, [(8, 2), (12, 10), (8, 13), (4, 11)], (108, 60, 102, 255))
+            line(tile, 8, 3, 9, 11, (243, 123, 158, 255))
+            line(tile, 9, 11, 6, 13, burgundy)
+        elif index == 4:  # Silicate crystal: bright bifaceted prism.
+            polygon(tile, [(8, 1), (14, 7), (9, 15), (3, 9)], ink)
+            polygon(tile, [(8, 2), (12, 7), (8, 13), (4, 8)], deep_blue)
+            polygon(tile, [(8, 2), (12, 7), (8, 13)], cyan)
+            line(tile, 6, 5, 8, 3, light)
+        elif index == 5:  # Resin fiber: paired green strands.
+            for dx in (4, 9):
+                line(tile, dx, 14, dx + 2, 3, ink)
+                line(tile, dx + 1, 13, dx + 3, 3, green)
+            line(tile, 6, 9, 3, 6, green)
+            line(tile, 11, 9, 14, 6, (167, 224, 137, 255))
+            rect(tile, 4, 13, 9, 2, rim)
+        elif index == 6:  # Organic gel: chemistry vial.
+            rect(tile, 5, 1, 6, 3, silver)
+            rect(tile, 4, 4, 8, 11, ink)
+            rect(tile, 5, 7, 6, 6, green)
+            rect(tile, 6, 5, 2, 2, light)
+            put(tile, 9, 10, cyan)
+            put(tile, 7, 12, light)
+        elif index == 7:  # Archive shard: broken data tile.
+            polygon(tile, [(2, 2), (11, 2), (14, 5), (14, 12), (9, 14), (2, 12)], ink)
+            rect(tile, 4, 4, 8, 8, deep_blue)
+            for x in (5, 7, 10):
+                rect(tile, x, 6, 1, 5, cyan)
+            put(tile, 11, 4, amber)
+            put(tile, 12, 11, light)
+        elif index == 8:  # Packed silt: granular sandpile.
+            polygon(tile, [(1, 13), (5, 7), (8, 4), (12, 9), (15, 13)], ink)
+            polygon(tile, [(3, 12), (7, 6), (9, 7), (13, 12)], (174, 145, 108, 255))
+            put(tile, 7, 8, light)
+            put(tile, 11, 11, rim)
+        elif index == 9:  # Field ration: sealed survival packet.
+            rect(tile, 3, 2, 10, 13, ink)
+            rect(tile, 4, 3, 8, 10, burgundy)
+            rect(tile, 4, 5, 8, 3, amber)
+            line(tile, 6, 11, 10, 11, light)
+            put(tile, 11, 4, light)
+        elif index == 10:  # Medfoam: medical capsule with cross.
+            rect(tile, 4, 2, 8, 13, ink)
+            rect(tile, 5, 3, 6, 11, silver)
+            rect(tile, 7, 5, 2, 7, burgundy)
+            rect(tile, 5, 7, 6, 2, burgundy)
+            rect(tile, 5, 12, 6, 2, deep_blue)
+        elif index == 11:  # Salvaged brick: split stone block.
+            rect(tile, 1, 4, 14, 9, ink)
+            rect(tile, 2, 5, 12, 7, (167, 111, 79, 255))
+            line(tile, 2, 8, 13, 8, (82, 62, 65, 255))
+            line(tile, 7, 5, 7, 8, (82, 62, 65, 255))
+            line(tile, 10, 9, 10, 12, (82, 62, 65, 255))
+            put(tile, 4, 6, amber)
+        elif index == 12:  # Shelter wall: pressure-sealed panel.
+            rect(tile, 2, 2, 12, 12, ink)
+            rect(tile, 3, 3, 10, 10, deep_blue)
+            rect(tile, 5, 4, 6, 2, cyan)
+            for x in (4, 11):
+                put(tile, x, 11, silver)
+        elif index == 13:  # Decking: wide horizontal grating.
+            rect(tile, 1, 5, 14, 7, ink)
+            rect(tile, 2, 6, 12, 3, silver)
+            for x in (4, 8, 12):
+                rect(tile, x, 6, 1, 6, rim)
+            line(tile, 2, 10, 13, 10, amber)
+        elif index == 14:  # Pressure door: tall sealed entry.
+            rect(tile, 4, 1, 8, 14, ink)
+            rect(tile, 5, 2, 6, 12, (91, 131, 158, 255))
+            rect(tile, 6, 3, 1, 10, light)
+            put(tile, 10, 9, amber)
+            rect(tile, 5, 13, 6, 1, rim)
+        elif index == 15:  # Survey lamp: bright lamp on mount.
+            rect(tile, 7, 8, 2, 6, silver)
+            rect(tile, 5, 13, 6, 2, ink)
+            ellipse(tile, 8, 6, 5, 5, deep_blue)
+            ellipse(tile, 8, 5, 3, 3, cyan)
+            rect(tile, 7, 3, 2, 2, light)
+        elif index == 16:  # Field storage crate.
+            rect(tile, 2, 4, 12, 10, ink)
+            rect(tile, 3, 5, 10, 8, (149, 105, 72, 255))
+            line(tile, 4, 6, 11, 12, amber)
+            line(tile, 11, 6, 4, 12, (88, 59, 56, 255))
+            rect(tile, 6, 4, 4, 2, silver)
+        elif index == 17:  # Workbench: engineering tabletop.
+            rect(tile, 1, 5, 14, 4, ink)
+            rect(tile, 2, 5, 12, 2, silver)
+            rect(tile, 3, 9, 2, 6, rim)
+            rect(tile, 11, 9, 2, 6, rim)
+            rect(tile, 7, 3, 4, 2, amber)
+            put(tile, 9, 4, cyan)
+        elif index == 18:  # Reinforced panel: structural shield.
+            polygon(tile, [(2, 2), (13, 2), (15, 6), (12, 14), (4, 14), (1, 7)], ink)
+            polygon(tile, [(4, 4), (12, 4), (13, 7), (11, 12), (5, 12), (3, 7)], silver)
+            line(tile, 4, 11, 12, 5, rim)
+            line(tile, 5, 5, 11, 12, copper)
+        elif index == 19:  # Repair kit: emergency toolbox.
+            rect(tile, 2, 5, 12, 9, ink)
+            rect(tile, 3, 6, 10, 6, (183, 98, 76, 255))
+            rect(tile, 6, 3, 5, 3, silver)
+            rect(tile, 7, 7, 2, 5, light)
+            rect(tile, 5, 9, 6, 2, light)
+            rect(tile, 10, 6, 2, 2, amber)
+        elif index == 20:  # Field coil: conductive winding.
+            rect(tile, 4, 2, 8, 12, ink)
+            for y in (4, 7, 10):
+                line(tile, 5, y, 11, y + 1, copper)
+            rect(tile, 2, 6, 3, 4, silver)
+            rect(tile, 11, 6, 3, 4, silver)
+            put(tile, 8, 2, light)
+        elif index == 21:  # Coolant loop: closed thermal exchanger.
+            ellipse(tile, 8, 8, 7, 6, ink)
+            ellipse(tile, 8, 8, 5, 4, cyan, fill=False)
+            rect(tile, 6, 1, 4, 3, silver)
+            rect(tile, 6, 12, 4, 3, deep_blue)
+            put(tile, 3, 8, light)
+        elif index == 22:  # Salvage cutter: diamond-tipped cutting tool.
+            line(tile, 3, 13, 10, 4, ink)
+            line(tile, 5, 13, 12, 4, silver)
+            polygon(tile, [(10, 2), (14, 3), (13, 7), (9, 6)], cyan)
+            rect(tile, 2, 12, 5, 3, amber)
+            put(tile, 13, 2, light)
+        elif index == 23:  # Survey scanner: blue lens handset.
+            rect(tile, 3, 2, 10, 13, ink)
+            rect(tile, 4, 3, 8, 10, rim)
+            ellipse(tile, 8, 7, 4, 4, cyan)
+            ellipse(tile, 8, 7, 2, 2, deep_blue)
+            rect(tile, 6, 12, 4, 2, amber)
+            put(tile, 8, 6, light)
+        elif index == 24:  # Thermal lining: crossed insulation strips.
+            rect(tile, 3, 2, 10, 12, ink)
+            rect(tile, 4, 3, 8, 10, (179, 111, 86, 255))
+            for y in (4, 7, 10):
+                line(tile, 4, y, 11, y + 2, amber)
+            line(tile, 4, 12, 11, 4, light)
+        elif index == 25:  # Cargo frame: open structural rack.
+            rect(tile, 2, 2, 12, 12, ink)
+            rect(tile, 4, 4, 8, 8, (0, 0, 0, 0))
+            for x in (2, 13):
+                rect(tile, x, 2, 2, 12, silver)
+            line(tile, 4, 4, 11, 11, copper)
+            line(tile, 11, 4, 4, 11, amber)
+        elif index == 26:  # Scanner lens: independent optical module.
+            ellipse(tile, 8, 8, 7, 7, ink)
+            ellipse(tile, 8, 8, 5, 5, silver)
+            ellipse(tile, 8, 8, 4, 4, deep_blue)
+            ellipse(tile, 8, 8, 2, 2, cyan)
+            put(tile, 6, 6, light)
+        ox, oy = (index % 8) * 16, (index // 8) * 16
+        for y, row in enumerate(tile):
+            for x, color in enumerate(row):
+                if color[3] != 0:
+                    put(img, ox + x, oy + y, color)
     save_png(ROOT / "assets/ui/item_icons.png", img)
 
 

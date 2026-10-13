@@ -161,21 +161,21 @@ const ITEMS := {
 	"thermal_lining":
 	{
 		"name": "Thermal lining",
-		"icon": 18,
+		"icon": 24,
 		"stack": 10,
 		"description": "A conventional suit layer that slows heat exposure near shear-glass."
 	},
 	"cargo_frame":
 	{
 		"name": "Cargo frame",
-		"icon": 16,
+		"icon": 25,
 		"stack": 10,
 		"description": "An installable rack that expands local stack capacity."
 	},
 	"scanner_lens":
 	{
 		"name": "Scanner lens",
-		"icon": 20,
+		"icon": 26,
 		"stack": 10,
 		"description": "A copper-and-glass optic that widens the scanner sweep."
 	},
@@ -293,6 +293,18 @@ const DISCOVERIES := {
 		"label": "SIMULATION RECORD — Glassfall",
 		"text":
 		"The distant shards read as a volcanic-glass ridge, not a structure. A local shear can overwrite a route and remain after travel. This generated pressure event is not a named catastrophe site."
+	},
+	"glassfall_before":
+	{
+		"label": "SIMULATION RECORD — Glassfall / Before",
+		"text":
+		"Survey readings show stressed, still-intact layers beneath the volcanic-glass ridge. A practical route exists here now; pressure can erase it. These measurements describe an invented survey event, not a named canon attack."
+	},
+	"glassfall_after":
+	{
+		"label": "SIMULATION RECORD — Glassfall / After",
+		"text":
+		"At the same survey coordinates, pressure has turned intact strata into a permanent open shear and an exposed fault. The before/after evidence changes the route, not the nature of Starsilk. The terrain and its damage persist on return."
 	},
 	"drowned":
 	{

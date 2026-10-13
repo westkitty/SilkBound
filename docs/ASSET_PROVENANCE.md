@@ -17,3 +17,13 @@ python3 tools/generate_assets.py
 ```
 
 The game imports and uses these PNG/WAV files directly. Terrain chunks sample the atlas; the player and threats build `SpriteFrames` from the supplied sheets; drops use the icon atlas; each destination uses its own background and looping ambience. `project.godot` and the Android export preset point to the original launcher icon.
+
+## 2026-10-12 visual integration uplift
+
+The original standard-library-only asset generator now produces four reproducible 16x16 variants per populated terrain ID, preserving serialized tile IDs, collision semantics and first-variant atlas offsets. Geological materials have distinct rock, ore, glass, crystal, water, plant and structure silhouettes. Runtime terrain drawing chooses a deterministic variant from world seed and tile coordinates: variants are visual only, not an additional world-state layer.
+
+The item atlas keeps its eight-column 16px index contract but supplies 27 purpose-drawn item silhouettes. Three previously shared catalog indices (thermal lining, cargo frame, scanner lens) receive unique entries. The in-game hotbar and inventory/fabrication panels now render the atlas art at gameplay scale; drops continue to use the same atlas indices.
+
+All changes use original procedural art. Existing character sheets, ship art, atmospheric PNGs and audio are regenerated identically by the script and were not replaced. A CanvasLayer scaling error that had reduced the existing biome image to a floating rectangle was corrected in `scripts/world/parallax_backdrop.gd`; the same backgrounds now span the full landscape.
+
+Verified with Godot 4.7.2 macOS runtime/screenshots on all three planets and an inventory view at 1280x720, plus import, 204 regression assertions / 0 failures and headless startup. Real Android visual/performance results and a fresh APK from this source revision need separate CI/hardware checks.

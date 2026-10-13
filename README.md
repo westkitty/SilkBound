@@ -11,11 +11,20 @@ This is original Starsilk fiction and game code, not a Starbound reskin. Starsil
 1. Start beside the damaged vessel on the Ashlands landing shelf.
 2. Cut the guaranteed salvage outcrop east of the ship; pickup drops physically land in the world.
 3. Carry **6 scrap + 4 ferrite** to the ship console and patch its drive. This unlocks the real Glassfall route.
-4. Survey Glassfall. Geological pressure warns, escalates, and changes a bounded section of terrain; its shallow shear remains after saving or leaving.
-5. Fabricate a conventional coolant loop from recovered ferrite, glass and crystal to reach the Drowned Remnant.
-6. Build shelter, use consumables, scan technical evidence, meet Iri and Vale, and return to earlier planets with their edits intact.
+4. Survey Glassfall. Scan near the eastern fault ridge before its pressure event to preserve a **PRE-FAILURE** field record. The exposed seam gains static amber/red ground markings as pressure escalates; the subsequent local shear changes actual terrain.
+5. Scan that same site after the fault conversion to preserve a separate **POST-FAILURE** field record. Terrain edits, field discoveries and changed routes are saved locally, including a save immediately after newly earned evidence.
+6. Fabricate a conventional coolant loop from recovered ferrite, glass and crystal to reach the Drowned Remnant.
+7. Build shelter, use consumables, scan technical evidence, meet Iri and Vale, and return to earlier planets with their edits intact.
 
 Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enemy attacks, ship upgrades, planet gates, rescues and persistent saves are connected gameplay systems rather than menu-only labels.
+
+## Title, Continue, and recovery
+
+On normal Android/desktop launch, **Mission Control** now opens a dedicated SilkBound title interface above a paused, non-interactive planetary scene. An existing living expedition offers **Continue expedition**; a first-time install offers **Begin first expedition**. Starting a different captain while a save exists requires a second explicit confirmation. Cancel and Settings always return safely to the title without deleting or overwriting progression. The game does not automatically save during the unconfirmed title screen, even if Android backgrounds the app.
+
+In gameplay, Pause -> Settings / Field Log / Compendium -> Back returns to the prior menu before resuming; likewise, ship navigation and cargo storage return to the ship console. Pause also provides **Save and return to title**. The deceased captain cannot be continued or revived; the terminal death interface has no dismissible Close path, while the next expedition remains available.
+
+This source change has passed local Godot validation, but physical Android title touch/back testing and a new CI APK build are still pending for the uncommitted implementation.
 
 ## Controls
 
@@ -26,6 +35,8 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 - Upper-right: scan, build mode, inventory, fabrication, ship service and pause. The pause menu opens the field log, compendium and settings.
 - Eight-item build hotbar is centered along the lower edge. Use the settings panel for larger touch targets and left-handed layout.
 - Controls track separate touch-pointer identities, so lifting an action finger does not cancel the movement stick.
+- A finger released beyond its original button or stick releases only that action. Changing control layout, pausing, or suspending play also releases held input.
+- Pausing or suspending play clears held touch actions and virtual-stick ownership. Touch-generated synthetic mouse clicks are not treated as physical mining or aiming input.
 
 ### Keyboard and mouse
 
@@ -44,6 +55,8 @@ Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enem
 godot --path .
 ```
 
+When a saved landing position becomes obstructed by actual terrain edits, loading finds unobstructed nearby ground without modifying the map; interplanetary travel resets leftover movement and fall velocity.
+
 The first launch creates a random world seed and a local save under `user://saves/`. The seed, terrain edits, dropped items, ship, inventory, settings, quests and localized terraforming state are saved locally. No account or network connection is used.
 
 ## Validate and export Android
@@ -55,10 +68,32 @@ The first launch creates a random world seed and a local save under `user://save
 
 The generated APK is intentionally not committed. Check the repository's **Actions → Android debug APK → Artifacts** for the verified build from a successful run.
 
+## Survey signal and rendering efficiency
+
+A scan still returns material-cell counts and temporary colored overlays. It now also identifies one **nearby priority material** with a real east/west/up/down bearing (for example, `SIGNAL WRECKAGE / 3 E 2 DOWN`), using actual scanned cells rather than a fictional waypoint.
+
+To reduce repeated rendering work, scanner overlays redraw only changed terrain chunks, and off-camera terrain artwork is hidden with one chunk of camera-smoothing margin. Collision continues across the entire map. The resolved tile cache keeps terrain reads consistent with saved edits without changing save structure. See [the source-level performance evidence](docs/PERFORMANCE.md); do not treat headless timings as Android FPS data.
+
+## Android field verification
+
+Godot import, deterministic regression tests and APK export are automated. **Touch usability, visual clipping, full progression and performance still require device proof.** Follow [the Android field-test checklist](docs/ANDROID_FIELD_TEST.md) before declaring this uplift production-ready. The Glassfall objective now displays a live east/west bearing and explicitly requests scans before and after the local shear.
+
 ## Project boundaries
 
 See:
 
 - [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — implemented systems and known scope limits.
+- [`SilkBound_bible.md`](SilkBound_bible.md) — dated implementation decisions, validation and remaining physical-device proof obligations.
 - [`docs/CANON_BOUNDARIES.md`](docs/CANON_BOUNDARIES.md) — canon facts versus simulation invention.
 - [`docs/ASSET_PROVENANCE.md`](docs/ASSET_PROVENANCE.md) — original generated art/audio and regeneration command.
+- [`docs/ANDROID_FIELD_TEST.md`](docs/ANDROID_FIELD_TEST.md) — repeatable Android-device manual QA and proof recording.
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — matched headless benchmark method and remaining performance unknowns.
+- [`OPERATIONAL_STATE.md`](OPERATIONAL_STATE.md) — current verified and unverified project control plane.
+
+## Guided first expedition and compact Android touch controls (local candidate)
+
+New captains receive five actionable field-guide steps: **move, break real terrain, scan, craft shelter walls, and return to the ship console**. Progress only advances after the corresponding action succeeds and saves in an optional `onboarding_step` field. Old save files lack that field and skip the guide rather than being interrupted. From the title or Pause menu, open **Field guide / how to play**; during a live expedition, the guidance can be skipped without losing access to the guide.
+
+Compact landscape windows enlarge actual action hitboxes and captions instead of simply scaling them down. All ten controls remain functional, including the flipped left-handed layout. The eight-slot build hotbar is now **horizontally swipeable**, keeping large slots without hiding slots 6–8. A selected slot scrolls into view, but periodic HUD refreshes never override a manual swipe. The field message stays above the enlarged rail.
+
+**Current evidence:** Godot 4.7.2 on macOS, 267/267 assertions, import and startup smoke; gameplay rendered at 720 × 405 on all three planets. The new features remain uncommitted locally; physical Android usability and a new APK have not been verified.

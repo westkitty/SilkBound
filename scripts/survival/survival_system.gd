@@ -35,11 +35,13 @@ func tick(delta: float, environment: Dictionary) -> bool:
 		energy = minf(100.0, energy + delta * (4.0 if sheltered else 1.4))
 	if sheltered and oxygen > 25.0 and exposure < 45.0:
 		health = minf(100.0, health + delta * 0.8)
-	_damage_clock += delta
-	if _damage_clock >= 1.0:
-		_damage_clock = 0.0
+	# Keep every whole damage interval, even after a long device stall.
+	_damage_clock += maxf(0.0, delta)
+	var pulses := floori(_damage_clock)
+	if pulses > 0:
+		_damage_clock -= float(pulses)
 		if oxygen <= 0.0 or exposure >= 100.0:
-			health = maxf(0.0, health - 5.0)
+			health = maxf(0.0, health - 5.0 * float(pulses))
 	return health <= 0.0
 
 

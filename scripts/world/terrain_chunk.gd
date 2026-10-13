@@ -3,6 +3,8 @@ extends Node2D
 const Tiles = preload("res://scripts/world/tile_catalog.gd")
 const TILE_SIZE := 32
 const ATLAS_COLUMNS := 8
+const ATLAS_VARIANTS := 4
+const ATLAS_VARIANT_STRIDE := 22
 const TEXTURE := preload("res://assets/tiles/terrain_atlas.png")
 const SCAN_COLORS := {
 	"ferrite": Color(0.19, 0.84, 0.91, 0.82),
@@ -36,13 +38,23 @@ func _draw() -> void:
 	var world_height := int(grid.get("world_height"))
 	var cracks: Dictionary = grid.get("cracks")
 	var highlights: Dictionary = grid.get("scan_highlights")
+	var phase := int(grid.get("fault_warning_phase"))
+	var variation_seed := int(grid.get("world_seed")) & 3
+	var preview_active := int(grid.get("biome")) == 1 and phase in [1, 2]
 	for y in range(world_height):
 		for x in range(first_x, end_x):
 			var tile_id := int(grid.call("get_tile", x, y))
 			if tile_id == Tiles.Tile.AIR:
 				continue
+			# Four deterministic visual variants preserve game logic, tile IDs,
+			# serialized edits, collisions and the first atlas group's offsets.
+			var variant := (x * 13 + y * 7 + (x >> 2) * (y >> 2) * 3 + variation_seed) & 3
+			var visual_index := tile_id + variant * ATLAS_VARIANT_STRIDE
 			var source := Rect2(
-				(tile_id % ATLAS_COLUMNS) * 16, int(tile_id / ATLAS_COLUMNS) * 16, 16, 16
+				(visual_index % ATLAS_COLUMNS) * 16,
+				int(visual_index / ATLAS_COLUMNS) * 16,
+				16,
+				16
 			)
 			var destination := Rect2((x - first_x) * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 			var tint := Color.WHITE
@@ -51,6 +63,30 @@ func _draw() -> void:
 			elif tile_id == Tiles.Tile.GLASS or tile_id == Tiles.Tile.FAULT:
 				tint = Color(1.0, 0.88, 0.94, 1.0)
 			draw_texture_rect_region(TEXTURE, destination, source, tint)
+			if (
+				preview_active
+				and abs(x - WorldGrid.GLASSFALL_FAULT_X) <= WorldGrid.GLASSFALL_FAULT_RADIUS
+				and y == int(grid.call("surface_at", x))
+			):
+				# Geological survey evidence, not an invented magical effect.
+				var trace_color := (
+					Color(0.94, 0.71, 0.38, 0.88)
+					if phase == 1
+					else Color(0.97, 0.39, 0.43, 0.98)
+				)
+				draw_line(
+					destination.position + Vector2(2, 3),
+					destination.position + Vector2(30, 3),
+					trace_color,
+					2.0
+				)
+				if phase == 2:
+					draw_line(
+						destination.position + Vector2(16, 3),
+						destination.position + Vector2(16, 15),
+						trace_color,
+						2.0
+					)
 			var cell_index := int(grid.call("cell_index", x, y))
 			if cracks.has(cell_index):
 				var amount := float(cracks[cell_index])

@@ -20,4 +20,76 @@ This is a focused single-player vertical slice, not a complete implementation of
 
 The current development container has no installed Godot executable, Java runtime or Android SDK. A local Godot 4.7.2 source build was attempted in a temporary cache but stopped before producing an executable; the official prebuilt editor/template archives redirect to a host blocked by this sandbox's outbound network policy. Therefore no Godot-native import, gameplay test, smoke launch or APK export has been run locally. `gdtoolkit` was used for GDScript formatting and syntax/style checks, not as a substitute for Godot.
 
-Latest remote gameplay/build verification succeeded in GitHub Actions for code commit `b6b8d6fc56205efd6927c5b66d826271b4bb93e3` (push run [38097079196](https://github.com/westkitty/SilkBound/actions/runs/38097079196); PR run [38097081193](https://github.com/westkitty/SilkBound/actions/runs/38097081193)). The workflow passed the validator diagnostic-filter regression, imported project resources, ran the deterministic gameplay tests, completed the bounded headless startup smoke test, exported an Android debug APK, verified the package and ARM64 native payload, and uploaded artifact `SilkBound-Android-debug-b6b8d6fc56205efd6927c5b66d826271b4bb93e3` (ID `11687105324`, 28,503,809 bytes). GitHub lists the artifact through 2026-11-10; it contains the APK and its SHA-256 file. Physical Android device testing remains unverified. The GDScript gameplay tests and Android export were executed remotely; this container still lacks Godot, Java and Android SDK, so those runtime checks have not been run locally.
+Historical October 10 CI verification succeeded in GitHub Actions for code commit `b6b8d6fc56205efd6927c5b66d826271b4bb93e3` (push run [38097079196](https://github.com/westkitty/SilkBound/actions/runs/38097079196); PR run [38097081193](https://github.com/westkitty/SilkBound/actions/runs/38097081193)). The workflow passed the validator diagnostic-filter regression, imported project resources, ran the deterministic gameplay tests, completed the bounded headless startup smoke test, exported an Android debug APK, verified the package and ARM64 native payload, and uploaded artifact `SilkBound-Android-debug-b6b8d6fc56205efd6927c5b66d826271b4bb93e3` (ID `11687105324`, 28,503,809 bytes). GitHub lists the artifact through 2026-11-10; it contains the APK and its SHA-256 file. Physical Android device testing remains unverified. The GDScript gameplay tests and Android export were executed remotely; this container still lacks Godot, Java and Android SDK, so those runtime checks have not been run locally.
+
+
+## October 11, 2026 — bounded Glassfall / lifecycle uplift
+
+Working branch: `uplift/glassfall-evidence-20261011`, based on merged main `a8c896cc6e9181b84f63fee939eed26c8687eb65`. The source/test implementation through `dfd5d67a4ef329bff3cc2e38e78f4a66632ae0b3` passed GitHub Actions [38114013779](https://github.com/westkitty/SilkBound/actions/runs/38114013779): Godot import, deterministic gameplay tests, startup smoke test, Android ARM64 debug export and package validation. APK artifact ID `11692612269` was uploaded. These results do **not** establish physical-device usability or a measured FPS gain.
+
+Changes:
+- Glassfall: physical warning lines trace the bounded fault surface at pressure phases 1 and 2. Scans near the intact and later converted shear produce independent `glassfall_before` and `glassfall_after` simulation records. The new records and real terrain edits survive a dedicated disk save/reload test; new discoveries are saved immediately in normal play.
+- Survival: environmental damage now accounts for all elapsed whole-second intervals after long frames rather than losing hazard ticks.
+- World sampling: shelter/thermal queries reuse one result per terrain-cell/revision, invalidating after placements and fault changes. Replaced tiles drop stale mining-crack state.
+- Input/lifecycle: pausing and application suspension clear the game router, physical held mouse flags, touch buttons and virtual-stick ownership. Non-build gameplay no longer queues needless overlay redraws each frame.
+- Regression coverage: explicitly exercises time-step equivalence, environment sample reuse/invalidation, survey records and mutation persistence, physical-world input cancellation.
+
+Limitations: no target Android phone/tablet was driven through the full play loop; no real-frame timing, thermal, battery or long-session profiling was performed; chunk redraw costs remain dependent on actual hardware. Scope intentionally excludes new biomes, new Drakken powers, world-streaming architecture, new dependencies and changes to gameplay identity.
+
+
+## October 11, 2026 — Round 2: Android input, reentry and readable survey objectives
+
+Feature branch `uplift/glassfall-evidence-20261011`; reviewed implementation commit `4c6ad74a8373c226ec9a13b0dcf268417224660f` builds and passes Godot native checks on GitHub Actions: [push run 38115856673](https://github.com/westkitty/SilkBound/actions/runs/38115856673) and [PR run 38115860476](https://github.com/westkitty/SilkBound/actions/runs/38115860476). The deterministic test suite reports **158 assertions, 0 failures**, and the push run produced an approximately 28.8 MB Android ARM64 debug APK (artifact `11692704418`). Physical device verification is still outstanding.
+
+Accepted cohesive change groups:
+1. Touch input ownership: a global release event outside the original on-screen control releases only the corresponding finger, leaving separate movement/action pointers unaffected. Rebuilding a touch layout also emits releases rather than abandoning held input.
+2. Saved-world safety: on mount, a stored position inside collidable terrain is redirected to a nearby unblocked surface point when available, without editing the world or rewriting progression. Existing player bodies now reset velocity, fall speed, jump requests and touch movement on interplanetary transitions.
+3. Field guidance: the Glassfall HUD shows distance and east/west bearing to the fault, emphasizes scanning intact strata before pressure conversion, and then directs the player to scan the modified fault. The existing records, physical terrain conversion and rewards remain unchanged.
+
+Observed intermediate validation failures were **test-code defects**, corrected before final validation: an untyped scene-instance declaration and a test that entered Glassfall without marking the drive repaired. Both fixes passed subsequent native tests. No new dependencies, shaders, maps, images, sound or canon events were added. No measured runtime performance increase is claimed.
+
+Unverified: Android GUI event dispatch for off-control releases, simultaneous multitouch on real hardware, small-display layout and viewport clipping, long-session thermal behavior, full exploration progression and physically observed save/reload restoration. Follow `docs/ANDROID_FIELD_TEST.md`. This uplift remains in draft PR #2; `main` is not changed.
+
+
+## October 11, 2026 — Performance / QQQ bounded repair pass
+
+Working branch: `uplift/glassfall-evidence-20261011`; implementation head `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab` passed both [push CI 38118392548](https://github.com/westkitty/SilkBound/actions/runs/38118392548) and [PR CI 38118394708](https://github.com/westkitty/SilkBound/actions/runs/38118394708). Godot import, tests (**178 assertions, 0 failures**), headless startup and Android ARM64 APK export passed. Built APK archive: artifact `11694422822`.
+
+Changes: resolved packed-array tile reads synchronized with edit/reload paths; scanner overlay invalidates only changed chunks and skips unchanged repeats; old highlights clear on expiry; squared-distance scanning also returns real nearest material coordinates for a priority compass-style signal; camera-aware visual-only chunk culling keeps an offscreen safety margin and leaves collision active. `WorldGrid.setup()` now clears stale transient cracks and scan overlays on reuse.
+
+Verified targeted measurements: matched six-trial Godot headless tile-read median **47,681.5 µs reference -> 23,629.0 µs cached** for 106,496 queries; scanner request count **9 -> 1** on the tested local scan, and near-ship visible terrain chunks **9 -> 2** at a 1280px test viewport. These are implementation-specific, runner-specific metrics, not measured Android frame rates. Earlier one-shot tile timing fluctuated and is superseded by the paired method-call benchmark. Source and method in `docs/PERFORMANCE.md`.
+
+No new dependencies or visual assets; previously locked non-canon character/cosmology, progression gates, terrain save schema, and touch controls preserved in tested paths. Hardware visual/performance behavior remains unverified. PR #2 is intentionally still a draft; `main` unchanged.
+
+
+## 2026-10-12 — Local OMNI verification (uncommitted)
+
+The draft PR #2 source was cloned at d4028018 and inspected on Big Mac using a local Godot 4.7.2 editor. Two user-visible reliability improvements are implemented in the working copy: same-solidity mining/building/terraforming redraws no longer unnecessarily reconstruct physics chunks, and a complete staged save is recoverable when both the primary and backup are unreadable. The test runner now gives deferred Godot teardown twelve frames to finish, eliminating its observed local exit-resource diagnostics without relaxing the validator.
+
+Local `tools/validate_project.sh` passed import, **204 assertions / 0 failures**, and startup smoke. `tests/test_validate_project.sh` also passed. This does **not** establish an Android binary for these edits, a measured device frame-rate improvement, device touch behavior or complete manual playthrough. The local modifications are not committed or pushed. Continue treating PR #2 as a draft until hardware proof is recorded.
+
+## 2026-10-12 — OMNI visual asset candidate and delivery checks
+
+Local Big Mac GUI inspection exposed a concrete backdrop scaling defect: the authored planet environment appeared as a small centered patch. Corrected full-viewport rendering in the existing CanvasLayer, confirmed with 1280x720 captures of all three planets. Regenerated exactly two tracked art files: terrain atlas (four deterministic 16px visual variants per tile ID, stronger material identity) and item atlas (27 distinctive equipment/material pictograms). Item catalog indices for three upgrades and live inventory, fabrication and hotbar UI were updated; all other generated artwork and audio remained unchanged.
+
+Validation with Godot 4.7.2 on Big Mac: `tools/validate_project.sh` passed 204 assertions / 0 failures, import and startup smoke; graphical capture of the inventory panel confirmed expanded icons. CI-built Android APK for this source revision and physical touchscreen/thermal/performance QA must be verified separately. Work remains on draft PR #2's feature branch; no merge of main is authorized.
+
+## 2026-10-12 — Game OMNI evaluation, first implementation batch P001/P002/P003
+
+**Local uncommitted source changes** on draft PR #2's feature branch `uplift/glassfall-evidence-20261011`, based on GitHub-verified commit `c8c798571d1dba12b50459be778ac5b967947b05`. GitHub Actions `38304192370` passed for that baseline commit; no new CI/APK has been produced for this new shell work.
+
+- **P001, reproduced P1 death/Close trap:** A modal Close action could hide the only new-expedition choice while `run_ended` and `is_paused` remained true, leaving no visible recovery. Death is now a non-dismissable terminal dialogue whose action starts a *new* captain. No canon resurrection, ghost consciousness, or old-save recovery was introduced.
+- **P002, reproduced P2 Back-context failure:** Settings from Pause formerly dismissed straight into active play. The existing HUD now tracks bounded panel history so Settings -> Pause, Navigation/Storage -> Ship, Title Settings -> Title, and Close at root -> Play. ESC/Back uses the same route; it cannot dismiss the mandatory terminal/title screens.
+- **P003, product shell:** Normal startup presents SilkBound's own ship-art title, first-run Begin, saved Continue, ended-run memorial, and saved-expedition replacement confirmation. Backgrounding/closing Android before explicit Begin/Continue does not write a game save. A paused expedition can be saved and returned to title. Test mode remains intentionally title-free for compatibility with game simulation tests.
+- **Validation:** local Godot 4.7.2 `tools/validate_project.sh` passed **234 assertions/0 failures**, import, and startup smoke; genuine 1280x720 title and Settings render captures stored outside the repository in Big Mac's temporary cache. The prior 204-assertion baseline also passed. No on-device Android gameplay, FPS, thermals, or new APK export has been verified for these uncommitted changes.
+- **Deferred:** P004 onboarding, P006 phone/tablet layout verification, P018 exit-resource diagnostics, and full device acceptance.
+
+## 2026-10-12 — Game OMNI batch 2 (local P004/P006 + P018 instrumentation)
+
+**Local uncommitted working copy** on PR #2's `uplift/glassfall-evidence-20261011`, based on `c8c798571d1dba12b50459be778ac5b967947b05`; preserves uncommitted P001–P003 from the preceding batch.
+
+- **P004:** event-driven five-stage field guide: move 72 real pixels, break a real terrain cell, perform a scanner sweep, craft Shelter walls ×2 using actual inventory, and access the physical ship console. Stage shown directly in the live objective field; help accessible from the title and Pause; skip is optional and safe. `onboarding_step` is an optional save member; old saves default to completed.
+- **P006:** live window-size compensation for actual touch hitboxes, non-overlapping radial controls, improved caption legibility, extended status-panel guide visibility, eight-slot swipeable large-button hotbar, and message clearances. Supports left-handed layouts and protects manual rail scrolling.
+- **P018:** historical GitHub CI `38304192370` test stage (commit c8c7985) showed seven ObjectDB instances and two resources still retained at process exit. Three local macOS 4.7.2 verbose trials on this candidate show **no** lifetime warnings, 264 assertions/zero failures each. Linux root cause is unverified. Next CI run has verbose diagnostics plus a separate warning annotation, rather than silently suppressing the finding.
+- **Evidence:** Godot 4.7.2 `tools/validate_project.sh` PASS, **267 assertions/zero failures**, import and headless smoke. Three real 720×405 planet renders captured in a Big Mac temporary working cache. All applicable static tests pass. Native Android touch, energy/thermal impact and new APK export are not tested.
+- **Delivery:** No commit, push, PR merge, dependency change or release for this batch. Explicit Git delivery remains a separate action.
