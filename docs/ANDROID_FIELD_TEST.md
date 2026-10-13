@@ -1,6 +1,6 @@
 # SILKBOUND Android field-test checklist
 
-**Build under test:** feature implementation commit `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab`.
+**Existing documented reference build:** feature implementation commit `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab`. The more recent verified GitHub baseline is `c8c798571d1dba12b50459be778ac5b967947b05`, successful [Actions run 38304192370](https://github.com/westkitty/SilkBound/actions/runs/38304192370). **Do not mistake that APK for the newer, local uncommitted P001/P002/P003 title/death/navigation implementation.** Record the exact new APK SHA once Git delivery and CI are explicitly authorized.
 **Source build:** [GitHub Actions run 38118392548](https://github.com/westkitty/SilkBound/actions/runs/38118392548).
 **Artifact:** [Android debug APK + checksum](https://github.com/westkitty/SilkBound/actions/runs/38118392548/artifacts/11694422822). This debug build is temporary; check expiration before use.
 
@@ -38,3 +38,37 @@ Record test device model, Android version, display dimensions, scaling, fresh in
 | Scanner bearing and terrain visibility | NOT RUN | |
 
 **Release gate:** A CI-green debug APK is not a hardware-qualified release. Keep draft PR #2 unmerged until material failures are fixed or explicitly accepted, and document the actual device proof.
+
+
+## New Game OMNI shell field tests (local P001 / P002 / P003 candidate)
+
+Run these against a future Android APK containing the **new shell commit**, not the earlier c8c7985 baseline. On a test device, back up any existing SilkBound `user://` save data before installing a destructive New Expedition candidate.
+
+1. With no saved expedition, cold-launch offline in landscape. Confirm the full-screen-darkened ship title shows **Begin first expedition**, not a false Continue. Open Settings, change sound/handedness, use X and Android Back to return to the title; gameplay must not start until Begin.
+2. Background/foreground and close the app while the initial title is open; reopen. No unconfirmed game save should have been created.
+3. Begin and mine at least one actual resource. Use Pause -> Settings -> Back; verify Pause remains open and the world simulation remains suspended. Repeat Pause -> Field Log/Compendium -> Back.
+4. Open Ship -> Navigation/Storage -> Back; confirm the correct Ship screen is restored. Back again returns to field play without spawning duplicate input listeners.
+5. Use **Save and return to title**. Confirm Continue appears; selecting it restores the exact same seed, planet, ship, inventory, world edits and quest state. A failed save must keep the player in the field rather than presenting a false Continue.
+6. From a valid-save title select **Begin a different expedition**. Back/cancel the irreversible confirmation; Continue and verify all old progress remains. Only perform Confirm after making a disposable or backed-up test save.
+7. In a disposable test run, trigger final death. Confirm neither header X, Android Back, pause, nor an arbitrary tap can hide the final-death decision into an unusable world. Begin a new captain and confirm new progress is separate.
+8. Relaunch an ended-run save to the memorial title; verify Continue is absent, Settings returns to title, canceled new-captain confirmation leaves the memorial intact, and explicit confirmation starts a different life.
+9. Check the title and modal controls on a smaller phone and larger tablet at native landscape scale, with larger touch targets and both handed layouts. Record visual clipping, OS gesture overlap, any stuck inputs, and real device logs.
+
+All nine checks are **NOT RUN on physical Android** for the new, uncommitted shell candidate. Local Godot 4.7.2 test mode did verify the behavioral paths with 234 assertions and rendered 1280x720 title/Settings captures.
+
+## Game OMNI P004 / P006 native Android acceptance checklist
+
+These tests apply to the next build **including** the local P004/P006 source. Prior successful CI APKs do not contain this batch.
+
+- [ ] First-ever Begin shows stage 1/5. Move on the touch stick to progress; simply standing and receiving input must not falsely complete movement.
+- [ ] Break actual mineable terrain with MINE (hold), then SCAN to reveal local materials; guide advances only on a real successful cut and scanner invocation.
+- [ ] Craft shelter walls from obtainable materials in MAKE; guide detects real ingredient deduction. Revisit the ship with USE/SHIP to finish stage 5/5.
+- [ ] Background, reopen and Continue between guide steps; progress and mined drops survive without extra resources or missing drops.
+- [ ] Open Field Guide from Pause, Back returns to Pause; Skip remains optional and does not alter gameplay objectives, ship, or resources.
+- [ ] On a compact phone, verify all ten action hitboxes are physically reachable, their labels readable and not overlapped by the status panel, movement stick or bottom rail.
+- [ ] Swipe to hotbar slots 6–8; selecting them scrolls into view. Manually swipe without selecting a slot and verify the rail does not keep snapping back during refresh.
+- [ ] Test left-handed layout and larger target size, including simultaneous movement+mining and finger releases outside controls; no stuck movement.
+- [ ] Verify UI and modal behavior with landscape display cutouts/system gestures on phone and tablet. Measure actual coordinates or include a screenshot in the test record.
+- [ ] Run the exact GitHub Android CI for the new commit and review verbose Godot lifetime messages; record object type and count separately from gameplay acceptance.
+
+**Physical device status: NOT RUN.** No Android performance, thermals, or APK acceptance claim follows from a desktop screenshot.

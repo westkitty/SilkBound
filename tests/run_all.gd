@@ -63,6 +63,9 @@ func _run() -> void:
 	await _test_world_changes_and_terraforming()
 	_test_versioned_save_round_trip()
 	await _test_main_scene_startup_and_touch_signals()
+	await _test_game_shell_navigation()
+	await _test_first_expedition_guidance()
+	await _test_responsive_touch_controls()
 	# Godot may queue nested collision/scene frees for later frames. Do not
 	# quit the test tree while those resources are still pending.
 	for _frame in range(12):
@@ -881,6 +884,328 @@ func _test_versioned_save_round_trip() -> void:
 		not bool(Save.load_slot("../escape")["ok"]),
 		"invalid slot names are rejected before filesystem access"
 	)
+
+
+func _test_responsive_touch_controls() -> void:
+	var game := (load("res://scenes/main.tscn") as PackedScene).instantiate() as SilkboundGame
+	game.test_mode = true
+	root.add_child(game)
+	await process_frame
+	var hud := game.hud
+	hud._rebuild_touch_controls(Vector2i(1280, 720))
+	await process_frame
+	var base_diameter := hud.action_buttons[4].size.x
+	# Rebuild at a narrower physical window without changing game-world
+	# canvas coordinates. Hitboxes must grow instead of becoming tiny.
+	hud._rebuild_touch_controls(Vector2i(720, 405))
+	await process_frame
+	_check(hud.action_buttons.size() == 10, "compact layout retains all original gameplay actions")
+	_check(
+		hud.action_buttons[4].size.x > base_diameter,
+		"smaller landscape screens enlarge logical action hitboxes"
+	)
+	var all_onscreen := true
+	var all_disjoint := true
+	var readable := true
+	for i in range(hud.action_buttons.size()):
+		var action: TouchActionButton = hud.action_buttons[i]
+		var bounds := action.get_global_rect()
+		if bounds.position.x < 0 or bounds.position.y < 0 or bounds.end.x > hud.root.size.x or bounds.end.y > hud.root.size.y:
+			all_onscreen = false
+		if bounds.size.x * (720.0 / 1280.0) < 48.0:
+			readable = false
+		for j in range(i + 1, hud.action_buttons.size()):
+			if bounds.intersects(hud.action_buttons[j].get_global_rect()):
+				all_disjoint = false
+	_check(all_onscreen, "all ten compact controls remain inside the reference viewport")
+	_check(all_disjoint, "compact touch controls have separate collision-free hitboxes")
+	_check(readable, "compact physical hitbox diameters stay at least 48 px")
+	var status_panel := hud.root.get_node("StatusPanel") as Control
+	_check(
+		status_panel.get_global_rect().end.x < hud.action_buttons[9].get_global_rect().position.x,
+		"utility controls stay clear of the left-side status panel"
+	)
+	var touch_bar := hud.root.get_node("TouchHotbar") as ScrollContainer
+	_check(
+		not hud.stick.get_global_rect().intersects(touch_bar.get_global_rect()),
+		"movement stick remains clear of inventory hotbar"
+	)
+	_check(
+		hud.hotbar_buttons.size() == 8
+		and touch_bar.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO,
+		"all eight saved construction slots survive in a swipeable rail"
+	)
+	var rail_button := hud.hotbar_buttons[0]
+	_check(
+		rail_button.size.x * (720.0 / 1280.0) >= 48.0
+		and rail_button.size.y * (720.0 / 1280.0) >= 48.0,
+		"narrow-window hotbar slots retain real minimum physical touch dimensions"
+	)
+	var rail_clear := true
+	for action in hud.action_buttons:
+		if touch_bar.get_global_rect().intersects(action.get_global_rect()):
+			rail_clear = false
+	_check(rail_clear, "larger hotbar stays clear of every action hitbox")
+	game.selected_hotbar = 7
+	hud.refresh()
+	await process_frame
+	await process_frame
+	_check(
+		touch_bar.scroll_horizontal > 0,
+		"selecting the farthest hotbar item scrolls its slot into view"
+	)
+	game.selected_hotbar = 0
+	hud.refresh()
+	await process_frame
+	await process_frame
+	_check(touch_bar.scroll_horizontal == 0, "returning to first slot restores the left rail")
+	touch_bar.scroll_horizontal = 100
+	hud.refresh()
+	await process_frame
+	_check(
+		touch_bar.scroll_horizontal == 100,
+		"background refresh never overrides a player's manual hotbar swipe"
+	)
+	# Handedness must keep these guarantees after a live layout rebuild.
+	game.settings["left_handed"] = true
+	hud._rebuild_touch_controls(Vector2i(720, 405))
+	await process_frame
+	_check(
+		hud.stick.get_global_rect().position.x > 960.0
+		and hud.action_buttons[0].get_global_rect().position.x < 400.0,
+		"left-handed arrangement swaps movement and action zones"
+	)
+	var left_disjoint := true
+	for i in range(hud.action_buttons.size()):
+		for j in range(i + 1, hud.action_buttons.size()):
+			if hud.action_buttons[i].get_global_rect().intersects(hud.action_buttons[j].get_global_rect()):
+				left_disjoint = false
+	_check(left_disjoint, "left-handed compact controls remain separated")
+	game.settings["left_handed"] = false
+	hud._rebuild_touch_controls(Vector2i(1280, 720))
+	await process_frame
+	_check(
+		absf(hud.action_buttons[4].size.x - base_diameter) < 0.1,
+		"returning to reference landscape restores standard hitboxes"
+	)
+	game.queue_free()
+	await process_frame
+
+
+func _test_first_expedition_guidance() -> void:
+	var game := (load("res://scenes/main.tscn") as PackedScene).instantiate() as SilkboundGame
+	game.test_mode = true
+	root.add_child(game)
+	await process_frame
+	var hud := game.hud
+	_check(
+		game.onboarding_step == 0 and game.field_guide_hint().contains("MOVE"),
+		"fresh captain sees a real movement instruction"
+	)
+	_check(
+		not game._advance_onboarding(3) and game.onboarding_step == 0,
+		"unrelated input cannot claim a completed guided action"
+	)
+	game.player.global_position.x += 80.0
+	game._process(0.016)
+	_check(game.onboarding_step == 1, "crossing landing ground advances actual movement step")
+	_check(hud.objective_label.text.contains("MINE"), "next guidance replaces only the context objective")
+	var base := game.world.world_to_cell(game.player.global_position)
+	var target := Vector2i(base.x + 1, base.y + 1)
+	game.world.set_tile(target.x, target.y, Tiles.Tile.SCRAP)
+	game._mouse_aim_active = true
+	game._last_action_was_touch = false
+	game._last_mouse_world = game.world.cell_to_world(target)
+	for attempt in range(12):
+		if game.onboarding_step != 1:
+			break
+		game._perform_mine()
+	_check(game.onboarding_step == 2, "real tile destruction advances guided mining")
+	game._scan()
+	_check(game.onboarding_step == 3, "real local scanner sweep advances guided survey")
+	var original_scrap := game.inventory.count("scrap")
+	game._on_hud_action("craft:shelter_wall")
+	_check(
+		game.onboarding_step == 4 and game.inventory.count("scrap") == original_scrap - 2,
+		"real successful crafting, with ingredient cost, advances fabrication"
+	)
+	game._on_hud_action("close")
+	game.player.global_position = game.ship_sprite.global_position + Vector2(24, 0)
+	game._dispatch_action("ship")
+	_check(
+		game.onboarding_step == 5 and game.is_paused and hud.current_panel_kind() == "ship",
+		"arriving at the physical ship console finishes guided onboarding"
+	)
+	_check(game.field_guide_hint().is_empty(), "completed guide restores canonical objective")
+	Save.delete_slot("test_field_guide")
+	_check(game.save_game("test_field_guide"), "progressed guide can save to isolated test slot")
+	var stored := Save.load_slot("test_field_guide")
+	_check(
+		bool(stored.get("ok", false)) and int(stored["data"].get("onboarding_step", -1)) == 5,
+		"optional guide state persists without changing the save version"
+	)
+	Save.delete_slot("test_field_guide")
+	var legacy_data: Dictionary = stored["data"].duplicate(true)
+	legacy_data.erase("onboarding_step")
+	game._restore_state(legacy_data)
+	_check(
+		game.onboarding_step == 5,
+		"older saves lacking the optional guide field bypass retroactive onboarding"
+	)
+	game._begin_new_expedition()
+	_check(game.onboarding_step == 0, "a genuinely new captain starts their own guide")
+	game._show_pause_menu()
+	game._on_hud_action("open_guide")
+	_check(hud.current_panel_kind() == "guide", "guide is accessible through the pause menu")
+	game._on_hud_action("guide_skip")
+	_check(
+		game.onboarding_step == 5 and hud.current_panel_kind() == "pause" and game.is_paused,
+		"skipping guide removes hints and returns to originating pause menu"
+	)
+	game.queue_free()
+	await process_frame
+
+
+func _test_game_shell_navigation() -> void:
+	# This test uses the game's isolated test mode: no live save slot is
+	# read, replaced, saved or deleted by title/death flows.
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var game := packed.instantiate() as SilkboundGame
+	game.test_mode = true
+	root.add_child(game)
+	await process_frame
+	var hud := game.hud
+	_check(not game.is_paused and not hud.modal.visible, "test-mode game boots without title overlay")
+
+	# P002: an explicit parent context survives nested menu navigation.
+	game._toggle_pause()
+	_check(game.is_paused and hud.current_panel_kind() == "pause", "pause panel opens and freezes world")
+	game._on_hud_action("open_settings")
+	_check(game.is_paused and hud.current_panel_kind() == "settings", "settings opens from pause")
+	hud._on_panel_action("close")
+	_check(game.is_paused and hud.current_panel_kind() == "pause", "Back from settings returns to pause")
+	game._toggle_pause()
+	_check(not game.is_paused and not hud.modal.visible, "Back from pause resumes field operations")
+
+	game.is_paused = true
+	hud.show_ship()
+	game._on_hud_action("open_travel")
+	_check(game.is_paused and hud.current_panel_kind() == "travel", "ship navigation opens as a nested panel")
+	hud._on_panel_action("close")
+	_check(game.is_paused and hud.current_panel_kind() == "ship", "Back from travel restores ship console")
+	game._on_hud_action("storage")
+	_check(game.is_paused and hud.current_panel_kind() == "storage", "storage opens as a nested ship panel")
+	hud._on_panel_action("close")
+	_check(game.is_paused and hud.current_panel_kind() == "ship", "Back from storage restores ship console")
+	hud._on_panel_action("close")
+	_check(not game.is_paused and not hud.modal.visible, "closing base ship panel resumes operations")
+
+	# P003: title has an explicit, nondestructive Continue/Begin boundary.
+	var original_seed := game.base_seed
+	game._had_valid_save = false
+	game._show_title_menu()
+	_check(game._title_open and game.is_paused and hud.current_panel_kind() == "title", "title screen suspends gameplay")
+	_check(not hud._panel_close_button.visible and hud._title_curtain.visible, "title blocks implicit Close and shields gameplay")
+	game._dispatch_action("mine")
+	_check(game._title_open, "held gameplay actions cannot bypass the title screen")
+	hud._on_panel_action("close")
+	_check(hud.modal.visible and game._title_open, "back button cannot abandon first-run title")
+	game._on_hud_action("title_settings")
+	_check(hud.current_panel_kind() == "settings" and game._title_open, "settings available before first expedition")
+	hud._on_panel_action("close")
+	_check(hud.current_panel_kind() == "title" and game._title_open, "settings returns to title without starting")
+	game._on_hud_action("title_guide")
+	_check(
+		game._title_open and hud.current_panel_kind() == "guide",
+		"field guide is available before starting a new captain"
+	)
+	hud._on_panel_action("close")
+	_check(
+		game._title_open and hud.current_panel_kind() == "title",
+		"Back from title field guide cannot secretly start gameplay"
+	)
+	game._on_hud_action("title_begin")
+	_check(
+		not game._title_open and not game.is_paused and game.base_seed == original_seed,
+		"first expedition starts only after explicit Begin with original seed preserved"
+	)
+
+	game._had_valid_save = true
+	game._show_title_menu()
+	game._on_hud_action("title_new_confirm")
+	_check(hud.current_panel_kind() == "title_confirm" and game._title_open, "existing save requires replace confirmation")
+	hud._on_panel_action("close")
+	_check(
+		hud.current_panel_kind() == "title" and game.base_seed == original_seed,
+		"cancel replacement preserves the original captain and seed"
+	)
+	game._on_hud_action("title_continue")
+	_check(
+		not game._title_open and not game.is_paused and game.base_seed == original_seed,
+		"Continue resumes prior simulation without rerolling progress"
+	)
+	# Returning to title is non-destructive and retains a valid continuation.
+	game._show_pause_menu()
+	game._on_hud_action("return_title")
+	_check(
+		game._title_open and game.is_paused and hud.current_panel_kind() == "title",
+		"pause-screen return brings the captain back to title without resetting progress"
+	)
+	game._on_hud_action("title_new_confirm")
+	game._on_hud_action("title_new_confirmed")
+	_check(
+		not game._title_open and not game.run_ended and not game.is_paused
+		and game.inventory.count("scrap") == 2,
+		"explicit replacement confirmation begins a fresh expedition"
+	)
+
+	# P001: final death is final but never strands the player in a hidden menu.
+	game._handle_final_death(true)
+	_check(
+		game.run_ended and hud.current_panel_kind() == "death" and hud.modal.visible,
+		"final death exposes the one safe new-captain decision"
+	)
+	_check(not hud._panel_dismissible and not hud._panel_close_button.visible, "death dialogue cannot be dismissed")
+	hud._on_panel_action("close")
+	game._on_hud_action("close")
+	game._dispatch_action("pause")
+	_check(
+		game.run_ended and hud.modal.visible and hud.current_panel_kind() == "death",
+		"Close, Back and gameplay actions cannot strand a dead captain"
+	)
+	game._on_hud_action("new_expedition")
+	_check(
+		not game.run_ended and not game.is_paused and not hud.modal.visible,
+		"explicit new expedition restores a playable world without resurrecting the captain"
+	)
+	# On a subsequent launch, the ended expedition is shown at the title.
+	# Its Settings and Back actions must work without reviving the captain.
+	game._handle_final_death(true)
+	game._show_title_menu()
+	_check(
+		game.run_ended and game._title_open and hud.current_panel_kind() == "title",
+		"an ended expedition opens a memorial title, not a playable Continue"
+	)
+	game._on_hud_action("title_new_confirm")
+	hud._on_panel_action("close")
+	_check(
+		game.run_ended and game._title_open and hud.current_panel_kind() == "title",
+		"Back from new-captain confirmation works after a death"
+	)
+	game._on_hud_action("title_settings")
+	hud._on_panel_action("close")
+	_check(
+		game.run_ended and hud.current_panel_kind() == "title",
+		"ended-run title settings return to the memorial without gameplay unlock"
+	)
+	game._on_hud_action("title_new_confirm")
+	game._on_hud_action("title_new_confirmed")
+	_check(
+		not game.run_ended and not game._title_open and not game.is_paused,
+		"a confirmed new captain from ended-run title can play"
+	)
+	game.queue_free()
+	await process_frame
 
 
 func _test_main_scene_startup_and_touch_signals() -> void:

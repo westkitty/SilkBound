@@ -12,6 +12,13 @@ const TileAtlas = preload("res://assets/tiles/terrain_atlas.png")
 const TILE_SIZE := 32
 const ATTACK_RANGE := 78.0
 const SAVE_SLOT := "slot_01"
+const FIELD_GUIDE_STEPS := [
+    "1/5  MOVE: Left stick or A/D. Cross the landing zone.",
+    "2/5  MINE: Face rock and hold MINE to break a real tile.",
+    "3/5  SCAN: Press SCAN / Q for a useful local signal.",
+    "4/5  CRAFT: Open MAKE / C and fabricate Shelter walls x2.",
+    "5/5  SHIP: Return to the vessel and press USE or SHIP."
+]
 const SOUND_PATHS := {
 	"mine": "res://assets/audio/mine_impact.wav",
 	"pickup": "res://assets/audio/pickup_chime.wav",
@@ -65,6 +72,10 @@ var _scan_highlight_clock := 0.0
 var _survivor_prompt_clock := 0.0
 var _respawn_choice_open := false
 var _spawn_adjusted := false
+var _title_open := false
+var _had_valid_save := false
+var onboarding_step := 0
+var _onboarding_origin_x := 0.0
 
 
 func _ready() -> void:
@@ -75,11 +86,14 @@ func _ready() -> void:
 		_start_fresh_state()
 	else:
 		var saved := SaveSystem.load_slot(SAVE_SLOT)
-		if bool(saved.get("ok", false)):
+		_had_valid_save = bool(saved.get("ok", false))
+		if _had_valid_save:
 			_restore_state(saved["data"])
 		else:
 			_start_fresh_state()
 	_mount_planet(current_planet_id)
+	if player != null:
+		_onboarding_origin_x = player.global_position.x
 	hud = GameHUD.new()
 	hud.name = "TouchHUD"
 	add_child(hud)
@@ -89,22 +103,17 @@ func _ready() -> void:
 	hud.touch_action_released.connect(_on_hud_touch_released)
 	hud.touch_stick_changed.connect(_on_hud_stick_changed)
 	_apply_audio_settings()
-	if run_ended:
+	if not test_mode:
+		# Startup must NEVER overwrite a valid save or create a new one
+		# before the player explicitly chooses Continue / Begin.
+		_show_title_menu()
+	elif run_ended:
 		_handle_final_death(true)
 	else:
-		(
-			hud
-			. show_message(
-				(
-					"SAVED POSITION OBSTRUCTED · returned to nearby stable ground."
-					if _spawn_adjusted
-					else "A damaged civilian vessel. No safe Starsilk handling. Keep the ship—and other people—alive."
-				),
-				7.0
-			)
+		hud.show_message(
+			"A damaged civilian vessel. No safe Starsilk handling. Keep the ship—and other people—alive.",
+			7.0
 		)
-	if not test_mode:
-		save_game()
 
 
 func _process(delta: float) -> void:
@@ -113,6 +122,8 @@ func _process(delta: float) -> void:
 		return
 	if world == null or player == null:
 		return
+	if onboarding_step == 0 and absf(player.global_position.x - _onboarding_origin_x) >= 72.0:
+		_advance_onboarding(0)
 	world.update_visible_chunks(
 		player.global_position.x, get_viewport_rect().size.x / maxf(0.1, player.camera.zoom.x)
 	)
@@ -222,7 +233,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		_cancel_live_input()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		if not run_ended and world != null:
+		# Merely previewing a title must not write a save or replace
+		# the saved expedition on Android background/close.
+		if not test_mode and not _title_open and not run_ended and world != null:
 			save_game()
 
 
@@ -330,6 +343,7 @@ func _start_fresh_state() -> void:
 	}
 	discoveries = ["starsilk", "macros", "blood_ring", "tiger", "peripheral_log"]
 	selected_hotbar = 0
+	onboarding_step = 0
 	is_paused = false
 	run_ended = false
 	build_mode = false
@@ -410,6 +424,8 @@ func _restore_state(data: Dictionary) -> void:
 		if not valid_items.is_empty():
 			hotbar_items = valid_items
 	selected_hotbar = clampi(int(data.get("selected_hotbar", 0)), 0, hotbar_items.size() - 1)
+	# Previous saves lack this optional key and should not restart guidance.
+	onboarding_step = clampi(int(data.get("onboarding_step", 5)), 0, FIELD_GUIDE_STEPS.size())
 	is_paused = false
 	run_ended = bool(data.get("run_ended", false))
 	build_mode = false
@@ -671,6 +687,7 @@ func save_game(slot: String = SAVE_SLOT) -> bool:
 		"discoveries": discoveries.duplicate(true),
 		"hotbar_items": hotbar_items.duplicate(true),
 		"selected_hotbar": selected_hotbar,
+		"onboarding_step": onboarding_step,
 		"settings": settings.duplicate(true),
 		"run_ended": run_ended
 	}
@@ -780,6 +797,8 @@ func _handle_final_death(loading_ended_run: bool) -> void:
 	if not loading_ended_run:
 		save_game()
 	if hud != null:
+		_title_open = false
+		hud.hide_modal()
 		_respawn_choice_open = true
 		var options: Array[Dictionary] = [
 			{"label": "Begin a new expedition (this captain is gone)", "action": "new_expedition"}
@@ -789,7 +808,9 @@ func _handle_final_death(loading_ended_run: bool) -> void:
 			. show_dialogue(
 				"DEATH IS FINAL",
 				"The suit record ends here. Stored data is not a surviving person. No recovery, clone or conscious remnant is available. A new expedition means a new life and a new seed.",
-				options
+				options,
+				"death",
+				false
 			)
 		)
 
@@ -800,7 +821,7 @@ func _on_player_landed_hard(_distance: float) -> void:
 
 
 func _dispatch_action(action: String) -> void:
-	if run_ended:
+	if run_ended or _title_open:
 		return
 	if is_paused and action != "pause":
 		return
@@ -834,6 +855,7 @@ func _dispatch_action(action: String) -> void:
 			if _near_ship(250.0):
 				is_paused = true
 				hud.show_ship()
+				_advance_onboarding(4)
 			else:
 				hud.show_message("The ship console is beyond interaction range.", 2.0)
 		"quests":
@@ -847,14 +869,30 @@ func _dispatch_action(action: String) -> void:
 
 
 func _on_hud_action(action: String) -> void:
+	if action.begins_with("title_"):
+		_handle_title_action(action)
+		return
+	if run_ended and not _title_open:
+		if action == "new_expedition":
+			_begin_new_expedition()
+		return
 	if action == "close":
-		if is_paused and not run_ended:
+		if not hud.navigate_back():
 			is_paused = false
 		return
+	if _title_open:
+		# HUD controls remain mounted under the title curtain; no gameplay
+		# action may bypass the explicit Continue/Begin confirmation.
+		if not (
+			action.begins_with("volume:") or action.begins_with("volume_down:")
+			or action in ["size:up", "size:down"] or action.begins_with("toggle:")
+		):
+			return
 	if action.begins_with("craft:"):
 		var recipe_id := action.trim_prefix("craft:")
 		var result := Crafting.craft(recipe_id, inventory)
 		if bool(result["ok"]):
+			_advance_onboarding(3)
 			play_sound("craft")
 			hud.show_message("Fabricated %s." % Items.RECIPES[recipe_id]["name"], 2.2)
 		else:
@@ -958,8 +996,20 @@ func _on_hud_action(action: String) -> void:
 		"resume":
 			is_paused = false
 			hud.hide_modal()
+		"return_title":
+			if not test_mode:
+				if not save_game():
+					hud.show_message("Save failed. Remaining in the field to protect progress.", 3.5)
+					return
+				_had_valid_save = true
+			hud.hide_modal()
+			_show_title_menu()
 		"open_settings":
 			hud.show_settings()
+		"open_guide":
+			hud.show_field_guide()
+		"guide_skip":
+			_skip_onboarding()
 		"open_quests":
 			hud.show_quests()
 		"open_compendium":
@@ -991,25 +1041,123 @@ func _on_hud_stick_changed(axis: Vector2) -> void:
 
 
 func _toggle_pause() -> void:
+	if _title_open:
+		if hud.current_panel_kind() != "title":
+			hud.navigate_back()
+		return
+	if run_ended:
+		return
 	if is_paused:
-		is_paused = false
-		hud.hide_modal()
+		_on_hud_action("close")
 	else:
-		is_paused = true
-		var options: Array[Dictionary] = [
-			{"label": "Resume field operations", "action": "resume"},
-			{"label": "Open the field log", "action": "open_quests"},
-			{"label": "Open the field compendium", "action": "open_compendium"},
-			{"label": "Accessibility and controls", "action": "open_settings"}
-		]
-		(
-			hud
-			. show_dialogue(
-				"FIELD PAUSED",
-				"World simulation is suspended while this panel is open. Autosave is local to this device.",
-				options
-			)
-		)
+		_show_pause_menu()
+
+
+func field_guide_step(index: int) -> String:
+	if index < 0 or index >= FIELD_GUIDE_STEPS.size():
+		return ""
+	return String(FIELD_GUIDE_STEPS[index])
+
+
+func onboarding_total() -> int:
+	return FIELD_GUIDE_STEPS.size()
+
+
+func field_guide_hint() -> String:
+	if onboarding_step < 0 or onboarding_step >= FIELD_GUIDE_STEPS.size():
+		return ""
+	return "FIELD GUIDE " + String(FIELD_GUIDE_STEPS[onboarding_step])
+
+
+func _advance_onboarding(expected_step: int) -> bool:
+	if run_ended or _title_open or onboarding_step != expected_step:
+		return false
+	onboarding_step += 1
+	if hud != null:
+		hud.refresh()
+		if onboarding_step == FIELD_GUIDE_STEPS.size():
+			hud.show_message("FIELD GUIDE COMPLETE · Repair the vessel and protect the living.", 4.0)
+	if not test_mode:
+		# Defer the checkpoint until freshly mined pickups enter the scene.
+		# Saving mid-frame could lose drops from the new cut.
+		call_deferred("save_game")
+	return true
+
+
+func _skip_onboarding() -> void:
+	if run_ended or _title_open:
+		return
+	onboarding_step = FIELD_GUIDE_STEPS.size()
+	if not test_mode:
+		save_game()
+	if hud != null:
+		hud.refresh()
+		if not hud.navigate_back():
+			is_paused = false
+
+
+func _show_pause_menu() -> void:
+	is_paused = true
+	var options: Array[Dictionary] = [
+		{"label": "Resume field operations", "action": "resume"},
+		{"label": "Open the field log", "action": "open_quests"},
+		{"label": "Open the field compendium", "action": "open_compendium"},
+		{"label": "Accessibility and controls", "action": "open_settings"},
+		{"label": "Field guide / how to play", "action": "open_guide"}
+	]
+	if not test_mode:
+		options.append({"label": "Save and return to title", "action": "return_title"})
+	hud.show_dialogue(
+		"FIELD PAUSED",
+		"World simulation is suspended while this panel is open. Autosave is local to this device.",
+		options,
+		"pause"
+	)
+
+
+func _show_title_menu() -> void:
+	_title_open = true
+	is_paused = true
+	_cancel_live_input()
+	hud.set_title_curtain(true)
+	hud.show_title(_had_valid_save and not run_ended, run_ended, planet_display_name(), base_seed)
+
+
+func _handle_title_action(action: String) -> void:
+	if not _title_open:
+		return
+	match action:
+		"title_settings":
+			hud.show_settings()
+		"title_guide":
+			hud.show_field_guide()
+		"title_new_confirm":
+			hud.show_new_expedition_confirmation()
+		"title_new_confirmed":
+			if hud.current_panel_kind() != "title_confirm":
+				return
+			_title_open = false
+			_begin_new_expedition()
+			_had_valid_save = not test_mode
+		"title_continue":
+			if not _had_valid_save or run_ended:
+				return
+			_title_open = false
+			is_paused = false
+			hud.hide_modal()
+			hud.show_message("Expedition resumed. The field record is intact.", 3.5)
+		"title_begin":
+			if _had_valid_save or run_ended:
+				return
+			_title_open = false
+			is_paused = false
+			hud.hide_modal()
+			if not test_mode:
+				_had_valid_save = save_game()
+			if not _had_valid_save and not test_mode:
+				hud.show_message("Local save unavailable. Do not exit until storage works.", 6.0)
+			else:
+				hud.show_message("The Outer Reaches · Recover salvage to repair the drive.", 5.0)
 
 
 func _perform_mine() -> void:
@@ -1031,6 +1179,7 @@ func _perform_mine() -> void:
 	if not bool(result.get("ok", false)):
 		return
 	if bool(result.get("broken", false)):
+		_advance_onboarding(1)
 		play_sound("mine")
 		var drop: Dictionary = result.get("drop", {})
 		if not drop.is_empty():
@@ -1152,6 +1301,7 @@ func _interact() -> void:
 	if _near_ship(250.0):
 		is_paused = true
 		hud.show_ship()
+		_advance_onboarding(4)
 		return
 	if world.has_tile_near(player.global_position, Tiles.Tile.CRATE, 3):
 		is_paused = true
@@ -1283,6 +1433,7 @@ func _scan() -> void:
 	if first_record:
 		summary_parts.append("FIELD RECORD STORED")
 	hud.show_message("SCAN  /  " + "   ·   ".join(PackedStringArray(summary_parts)), 3.8)
+	_advance_onboarding(2)
 	hud.refresh()
 	if record_written and not test_mode:
 		save_game()
@@ -1697,11 +1848,15 @@ func _begin_new_expedition() -> void:
 		player.velocity = Vector2.ZERO
 		player.alive = true
 	_start_fresh_state()
-	SaveSystem.delete_slot(SAVE_SLOT)
+	if not test_mode:
+		SaveSystem.delete_slot(SAVE_SLOT)
 	_mount_planet("ashlands")
+	if player != null:
+		_onboarding_origin_x = player.global_position.x
 	is_paused = false
 	_respawn_choice_open = false
 	hud.hide_modal()
 	hud.configure(self)
 	hud.show_message("New seed generated · a different captain, no recovered life.", 4.0)
-	save_game()
+	if not test_mode:
+		save_game()

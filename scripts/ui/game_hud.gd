@@ -10,7 +10,7 @@ const Items = preload("res://scripts/inventory/item_catalog.gd")
 const ItemIcons = preload("res://assets/ui/item_icons.png")
 const ActionButton = preload("res://scripts/ui/touch_action_button.gd")
 const Stick = preload("res://scripts/ui/virtual_stick.gd")
-const MESSAGE_SAFE_BOTTOM := 76.0
+const MESSAGE_SAFE_BOTTOM := 120.0
 const MESSAGE_MIN_HEIGHT := 50.0
 const MESSAGE_MAX_HEIGHT := 134.0
 const MESSAGE_CHARS_PER_LINE := 64.0
@@ -25,6 +25,9 @@ var hotbar_label: Label
 var message_label: Label
 var message_timer := 0.0
 var hotbar_buttons: Array[Button] = []
+var _hotbar_scroll: ScrollContainer
+var _hotbar_row: HBoxContainer
+var _last_hotbar_selection := -1
 var modal: PanelContainer
 var modal_title: Label
 var modal_rows: VBoxContainer
@@ -32,12 +35,20 @@ var stick: VirtualStick
 var action_buttons: Array[TouchActionButton] = []
 var _item_icon_cache: Dictionary = {}
 var _panel_kind := ""
+var _panel_history: Array[String] = []
+var _restoring_panel := false
+var _panel_dismissible := true
+var _panel_close_button: Button
+var _title_curtain: ColorRect
 var _last_refresh := 0.0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_layout()
+	# Input hitboxes follow physical window changes without changing world
+	# coordinates or the per-pointer action ownership contract.
+	get_window().size_changed.connect(_rebuild_touch_controls)
 
 
 func configure(owner_game: Node) -> void:
@@ -76,7 +87,8 @@ func refresh() -> void:
 			"   /   EXPOSURE %02d" % exposure if exposure > 0 else ""
 		]
 	)
-	objective_label.text = String(game.call("objective_text"))
+	var guide := String(game.call("field_guide_hint"))
+	objective_label.text = guide if not guide.is_empty() else String(game.call("objective_text"))
 	var inventory: Inventory = game.get("inventory")
 	var quick_items: Array[String] = []
 	if inventory != null:
@@ -107,8 +119,7 @@ func show_message(text: String, seconds: float = 3.0) -> void:
 
 func show_inventory(rebuild: bool = true) -> void:
 	if rebuild:
-		_panel_kind = "inventory"
-		_begin_panel("FIELD INVENTORY")
+		_begin_panel("FIELD INVENTORY", "inventory")
 		var inventory: Inventory = game.get("inventory")
 		if inventory == null or inventory.stacks.is_empty():
 			_add_row("No recoverable material carried.", "", true)
@@ -135,8 +146,7 @@ func show_inventory(rebuild: bool = true) -> void:
 
 
 func show_crafting() -> void:
-	_panel_kind = "crafting"
-	_begin_panel("FIELD FABRICATION")
+	_begin_panel("FIELD FABRICATION", "crafting")
 	var inventory: Inventory = game.get("inventory")
 	for recipe_id in Items.RECIPES.keys():
 		var recipe: Dictionary = Items.RECIPES[recipe_id]
@@ -159,8 +169,7 @@ func show_crafting() -> void:
 
 
 func show_travel() -> void:
-	_panel_kind = "travel"
-	_begin_panel("NAVIGATION / SURVEYED ROUTES")
+	_begin_panel("NAVIGATION / SURVEYED ROUTES", "travel")
 	var ship: Dictionary = game.get("ship_state")
 	var visited: Array = game.get("visited_planets")
 	for row in TravelSystem.destination_rows(ship, visited):
@@ -181,8 +190,7 @@ func show_travel() -> void:
 
 
 func show_ship() -> void:
-	_panel_kind = "ship"
-	_begin_panel("SALVAGE VESSEL / SERVICE BAY")
+	_begin_panel("SALVAGE VESSEL / SERVICE BAY", "ship")
 	var ship: Dictionary = game.get("ship_state")
 	var inventory: Inventory = game.get("inventory")
 	var integrity := int(ship.get("integrity", 34))
@@ -238,8 +246,7 @@ func show_ship() -> void:
 
 
 func show_storage(storage: Dictionary, title: String = "FIELD STORAGE") -> void:
-	_panel_kind = "storage"
-	_begin_panel(title.to_upper())
+	_begin_panel(title.to_upper(), "storage")
 	var inventory: Inventory = game.get("inventory")
 	_add_row("Transfer is one item at a time. The cache stays in this save slot.", "", true)
 	for item_id in inventory.item_ids():
@@ -267,11 +274,70 @@ func hide_modal() -> void:
 	if modal != null:
 		modal.visible = false
 	_panel_kind = ""
+	_panel_history.clear()
+	_panel_dismissible = true
+	if _title_curtain != null:
+		_title_curtain.visible = false
+
+
+func current_panel_kind() -> String:
+	return _panel_kind
+
+
+func set_title_curtain(enabled: bool) -> void:
+	if _title_curtain == null:
+		return
+	_title_curtain.visible = enabled
+	if enabled:
+		root.move_child(_title_curtain, root.get_child_count() - 1)
+		if modal.visible:
+			root.move_child(modal, root.get_child_count() - 1)
+
+
+func navigate_back() -> bool:
+	# Terminal screens cannot be dismissed into a paused, unusable world.
+	if not _panel_dismissible:
+		return true
+	if not _panel_history.is_empty():
+		var previous: String = _panel_history.pop_back()
+		_restoring_panel = true
+		match previous:
+			"pause":
+				game.call("_show_pause_menu")
+			"title":
+				game.call("_show_title_menu")
+			"inventory":
+				show_inventory()
+			"crafting":
+				show_crafting()
+			"ship":
+				show_ship()
+			"travel":
+				show_travel()
+			"storage":
+				var kind := String(game.get("current_storage_kind"))
+				show_storage(
+					game.call("_storage_for_current_mode"),
+					"SHIP CARGO" if kind == "ship" else "PLANET CACHE"
+				)
+			"quests":
+				show_quests()
+			"compendium":
+				show_compendium()
+			"guide":
+				show_field_guide()
+			_:
+				_restoring_panel = false
+				hide_modal()
+				return false
+		_restoring_panel = false
+		return true
+	hide_modal()
+	return false
 
 
 func show_quests() -> void:
-	_panel_kind = "quests"
-	_begin_panel("FIELD LOG / SURVIVORS")
+	_begin_panel("FIELD LOG / SURVIVORS", "quests")
 	for quest_id in QuestSystem.QUESTS.keys():
 		var definition: Dictionary = QuestSystem.QUESTS[quest_id]
 		var entry: Dictionary = game.get("quest_system").states.get(
@@ -294,8 +360,7 @@ func show_quests() -> void:
 
 
 func show_compendium() -> void:
-	_panel_kind = "compendium"
-	_begin_panel("FIELD COMPENDIUM")
+	_begin_panel("FIELD COMPENDIUM", "compendium")
 	var known: Array = game.get("discoveries")
 	for discovery_id in known:
 		if Items.DISCOVERIES.has(String(discovery_id)):
@@ -309,8 +374,7 @@ func show_compendium() -> void:
 
 
 func show_settings() -> void:
-	_panel_kind = "settings"
-	_begin_panel("ACCESSIBILITY / CONTROLS")
+	_begin_panel("ACCESSIBILITY / CONTROLS", "settings")
 	var settings: Dictionary = game.get("settings")
 	_add_row(
 		(
@@ -366,9 +430,14 @@ func show_settings() -> void:
 	_add_row("Close settings", "close", false)
 
 
-func show_dialogue(title: String, text: String, options: Array[Dictionary] = []) -> void:
-	_panel_kind = "dialogue"
-	_begin_panel(title.to_upper())
+func show_dialogue(
+	title: String,
+	text: String,
+	options: Array[Dictionary] = [],
+	kind: String = "dialogue",
+	dismissible: bool = true
+) -> void:
+	_begin_panel(title.to_upper(), kind, dismissible)
 	_add_row(text, "", true)
 	for option in options:
 		_add_row(
@@ -376,7 +445,65 @@ func show_dialogue(title: String, text: String, options: Array[Dictionary] = [])
 			String(option.get("action", "close")),
 			bool(option.get("disabled", false))
 		)
-	_add_row("Leave conversation", "close", false)
+	if dismissible:
+		_add_row("Back / close", "close", false)
+
+
+func show_title(has_active_save: bool, ended: bool, destination: String, seed: int) -> void:
+	_begin_panel("SILKBOUND / THE OUTER REACHES", "title", false)
+	var artwork := TextureRect.new()
+	artwork.texture = preload("res://assets/ship/salvage_vessel.png")
+	artwork.custom_minimum_size = Vector2(0.0, 126.0)
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	artwork.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	modal_rows.add_child(artwork)
+	_add_row("BLOOD ECLIPSE WAR  /  PERIPHERAL SALVAGE OPERATIONS", "", true)
+	if ended:
+		_add_row("EXPEDITION ENDED  /  The last captain cannot return.", "", true)
+		_add_row("Begin as a new captain", "title_new_confirm", false)
+	elif has_active_save:
+		_add_row("SAVED EXPEDITION  /  %s  /  SEED %08d" % [destination.to_upper(), seed], "", true)
+		_add_row("Continue expedition", "title_continue", false)
+		_add_row("Begin a different expedition (replaces current save)", "title_new_confirm", false)
+	else:
+		_add_row("The vessel is damaged. The people and the geological evidence are real.", "", true)
+		_add_row("Begin first expedition", "title_begin", false)
+	_add_row("Accessibility, sound and controls", "title_settings", false)
+	_add_row("Field guide / how to play", "title_guide", false)
+	_add_row("Offline, single-player, non-canon Starsilk simulation.", "", true)
+
+
+func show_field_guide() -> void:
+	_begin_panel("FIELD GUIDE / FIRST EXPEDITION", "guide")
+	_add_row("Salvage, build shelter, and repair the ship. No raw Starsilk handling.", "", true)
+	var step := int(game.get("onboarding_step"))
+	for index in range(int(game.call("onboarding_total"))):
+		var status := "LATER  "
+		if index < step:
+			status = "DONE   "
+		elif index == step:
+			status = "NEXT   "
+		_add_row(status + String(game.call("field_guide_step", index)), "", true)
+	_add_row("JUMP / SPACE · BAG / I · MAKE / C · BUILD / B · SCAN / Q", "", true)
+	_add_row("Repair the drive at the ship console: 6 scrap + 4 ferrite.", "", true)
+	if not bool(game.get("_title_open")) and step < int(game.call("onboarding_total")):
+		_add_row("Skip guided steps (keep this guide in the Pause menu)", "guide_skip", false)
+	_add_row("Back", "close", false)
+
+
+func show_new_expedition_confirmation() -> void:
+	show_dialogue(
+		"REPLACE SAVED EXPEDITION?",
+		"Beginning another expedition permanently replaces this captain's local save. A dead captain cannot be recovered. Nothing is erased by choosing Back.",
+		[
+			{"label": "Back to the title (keep save)", "action": "close"},
+			{"label": "Confirm: begin new expedition", "action": "title_new_confirmed"}
+		],
+		"title_confirm",
+		true
+	)
 
 
 func refresh_current_panel() -> void:
@@ -480,27 +607,48 @@ func _build_layout() -> void:
 
 
 func _build_hotbar() -> void:
-	var container := HBoxContainer.new()
-	container.name = "TouchHotbar"
-	container.anchor_left = 0.5
-	container.anchor_right = 0.5
-	container.anchor_top = 1.0
-	container.anchor_bottom = 1.0
-	container.offset_left = -288
-	container.offset_right = 288
-	container.offset_top = -66
-	container.offset_bottom = -14
-	container.add_theme_constant_override("separation", 3)
-	container.mouse_filter = Control.MOUSE_FILTER_PASS
-	root.add_child(container)
+	# A clipped, swipeable rail retains all eight crafting slots without
+	# shrinking their physical hit targets on compact Android landscape.
+	_hotbar_scroll = ScrollContainer.new()
+	_hotbar_scroll.name = "TouchHotbar"
+	_hotbar_scroll.anchor_left = 0.5
+	_hotbar_scroll.anchor_right = 0.5
+	_hotbar_scroll.anchor_top = 1.0
+	_hotbar_scroll.anchor_bottom = 1.0
+	_hotbar_scroll.offset_left = -288
+	_hotbar_scroll.offset_right = 288
+	_hotbar_scroll.offset_top = -69
+	_hotbar_scroll.offset_bottom = -15
+	_hotbar_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_hotbar_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_hotbar_scroll.scroll_deadzone = 8
+	_hotbar_scroll.follow_focus = true
+	_hotbar_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	root.add_child(_hotbar_scroll)
+	_hotbar_row = HBoxContainer.new()
+	_hotbar_row.name = "TouchHotbarItems"
+	_hotbar_row.add_theme_constant_override("separation", 3)
+	_hotbar_scroll.add_child(_hotbar_row)
 	for index in range(8):
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(68, 52)
+		button.custom_minimum_size = Vector2(68, 54)
 		button.add_theme_font_size_override("font_size", 12)
 		button.add_theme_constant_override("h_separation", 2)
 		button.pressed.connect(_on_panel_action.bind("hotbar:%d" % index))
-		container.add_child(button)
+		_hotbar_row.add_child(button)
 		hotbar_buttons.append(button)
+
+
+func _layout_hotbar(scale_value: float) -> void:
+	if _hotbar_scroll == null:
+		return
+	var slot_height := 54.0 * scale_value
+	_hotbar_scroll.offset_top = -slot_height - 15.0
+	_hotbar_scroll.offset_bottom = -15.0
+	for button in hotbar_buttons:
+		button.custom_minimum_size = Vector2(68.0 * scale_value, slot_height)
+		button.add_theme_font_size_override("font_size", roundi(12.0 * minf(1.4, scale_value)))
+	_last_hotbar_selection = -1
 
 
 func _icon_for_item(item_id: String) -> Texture2D:
@@ -541,6 +689,11 @@ func _update_hotbar_buttons() -> void:
 		hotbar_buttons[index].modulate = (
 			Color(0.45, 0.93, 0.89) if index == selected else Color.WHITE
 		)
+	if selected != _last_hotbar_selection and selected >= 0 and selected < hotbar_buttons.size():
+		_last_hotbar_selection = selected
+		# Only move the rail for a changed selection; otherwise a swipe
+		# would be reset on each quarter-second HUD refresh.
+		_hotbar_scroll.call_deferred("ensure_control_visible", hotbar_buttons[selected])
 
 
 func _build_status_panel() -> void:
@@ -553,7 +706,7 @@ func _build_status_panel() -> void:
 	panel.offset_left = 22
 	panel.offset_top = 18
 	panel.offset_right = 510
-	panel.offset_bottom = 135
+	panel.offset_bottom = 161
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override(
 		"panel", _panel_style(Color(0.025, 0.065, 0.105, 0.83), Color(0.22, 0.57, 0.66, 0.8))
@@ -569,6 +722,8 @@ func _build_status_panel() -> void:
 	objective_label = _make_label(
 		"Recover local materials. Keep clear of the shear.", 15, Color(0.94, 0.78, 0.54)
 	)
+	objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	objective_label.clip_text = false
 	hotbar_label = _make_label("FIELD LOAD  |  Salvage cutter", 14, Color(0.77, 0.87, 0.90))
 	column.add_child(status_label)
 	column.add_child(location_label)
@@ -594,6 +749,15 @@ func _build_modal() -> void:
 	modal.visible = false
 	modal.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(modal)
+	# The existing authored planet backdrop remains visible, but inert,
+	# behind the mission-control entry screen and its settings.
+	_title_curtain = ColorRect.new()
+	_title_curtain.name = "TitleCurtain"
+	_title_curtain.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_title_curtain.color = Color(0.005, 0.015, 0.035, 0.84)
+	_title_curtain.mouse_filter = Control.MOUSE_FILTER_STOP
+	_title_curtain.visible = false
+	root.add_child(_title_curtain)
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 10)
 	modal.add_child(outer)
@@ -608,6 +772,7 @@ func _build_modal() -> void:
 	close_button.add_theme_font_size_override("font_size", 22)
 	close_button.pressed.connect(_on_panel_action.bind("close"))
 	header.add_child(close_button)
+	_panel_close_button = close_button
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -618,7 +783,7 @@ func _build_modal() -> void:
 	scroll.add_child(modal_rows)
 
 
-func _rebuild_touch_controls() -> void:
+func _rebuild_touch_controls(simulated_window: Vector2i = Vector2i.ZERO) -> void:
 	if root == null:
 		return
 	cancel_live_controls()
@@ -632,7 +797,18 @@ func _rebuild_touch_controls() -> void:
 		return
 	var settings: Dictionary = game.get("settings")
 	var left_handed := bool(settings.get("left_handed", false))
-	var scale_value := clampf(float(settings.get("button_scale", 1.0)), 0.78, 1.38)
+	# The canvas remains 1280 logical pixels wide. A smaller output
+	# surface shrinks native touch circles unless their logical bounds grow.
+	var width_pixels := float(
+		simulated_window.x if simulated_window.x > 0 else get_window().size.x
+	)
+	var screen_compensation := maxf(1.0, 1280.0 / maxf(720.0, width_pixels))
+	var scale_value := clampf(
+		float(settings.get("button_scale", 1.0)) * screen_compensation,
+		0.78,
+		1.6
+	)
+	_layout_hotbar(scale_value)
 	stick = Stick.new()
 	stick.name = "VirtualMovementStick"
 	var stick_size := 160.0 * scale_value
@@ -658,25 +834,31 @@ func _rebuild_touch_controls() -> void:
 	root.add_child(stick)
 	var action_anchor_x := 0.0 if left_handed else 1.0
 	var horizontal_sign := 1.0 if left_handed else -1.0
+	# Separate hitboxes remain disjoint at both normal and maximum scale.
+	# Below the viewport's 1280 logical reference width, these give at least
+	# 50 physical pixels per action on a 720-pixel landscape.
 	_add_action(
-		"jump", "JUMP", action_anchor_x, 1.0, horizontal_sign * 92.0, -102.0, 78.0 * scale_value
+		"jump", "JUMP", action_anchor_x, 1.0, horizontal_sign * 112.0, -100.0, 78.0 * scale_value
 	)
 	_add_action(
-		"mine", "MINE", action_anchor_x, 1.0, horizontal_sign * 190.0, -102.0, 78.0 * scale_value
+		"mine", "MINE", action_anchor_x, 1.0, horizontal_sign * 244.0, -100.0, 78.0 * scale_value
 	)
 	_add_action(
-		"attack", "HIT", action_anchor_x, 1.0, horizontal_sign * 92.0, -196.0, 72.0 * scale_value
+		"attack", "HIT", action_anchor_x, 1.0, horizontal_sign * 112.0, -248.0, 72.0 * scale_value
 	)
 	_add_action(
-		"interact", "USE", action_anchor_x, 1.0, horizontal_sign * 190.0, -196.0, 72.0 * scale_value
+		"interact", "USE", action_anchor_x, 1.0, horizontal_sign * 244.0, -248.0, 72.0 * scale_value
 	)
-	# Six compact, reachable utility buttons sit along the upper-right safe inset.
-	_add_action("scan", "SCAN", 1.0, 0.0, -72.0, 82.0, 62.0 * scale_value)
-	_add_action("build", "BUILD", 1.0, 0.0, -142.0, 82.0, 62.0 * scale_value)
-	_add_action("inventory", "BAG", 1.0, 0.0, -212.0, 82.0, 62.0 * scale_value)
-	_add_action("craft", "MAKE", 1.0, 0.0, -282.0, 82.0, 62.0 * scale_value)
-	_add_action("ship", "SHIP", 1.0, 0.0, -352.0, 82.0, 62.0 * scale_value)
-	_add_action("pause", "MENU", 1.0, 0.0, -422.0, 82.0, 62.0 * scale_value)
+	# Six utilities occupy individual 100px columns above the field,
+	# leaving the left status panel clear even at maximum button scale.
+	var utility_actions := ["scan", "build", "inventory", "craft", "ship", "pause"]
+	var utility_captions := ["SCAN", "BUILD", "BAG", "MAKE", "SHIP", "MENU"]
+	for index in range(utility_actions.size()):
+		_add_action(
+			String(utility_actions[index]),
+			String(utility_captions[index]),
+			1.0, 0.0, -90.0 - 110.0 * index, 82.0, 62.0 * scale_value
+		)
 
 
 func _add_action(
@@ -705,7 +887,13 @@ func _add_action(
 	action_buttons.append(button)
 
 
-func _begin_panel(title: String) -> void:
+func _begin_panel(title: String, kind: String, dismissible: bool = true) -> void:
+	if modal.visible and _panel_kind != kind and not _restoring_panel:
+		if _panel_kind != "" and _panel_kind != "death":
+			_panel_history.append(_panel_kind)
+	_panel_kind = kind
+	_panel_dismissible = dismissible
+	_panel_close_button.visible = dismissible
 	modal_title.text = title
 	modal.visible = true
 	root.move_child(modal, root.get_child_count() - 1)
@@ -745,9 +933,7 @@ func _on_stick_changed(axis: Vector2) -> void:
 
 
 func _on_panel_action(action: String) -> void:
-	if action == "close":
-		modal.visible = false
-		action_requested.emit("close")
+	if action == "close" and not _panel_dismissible:
 		return
 	action_requested.emit(action)
 

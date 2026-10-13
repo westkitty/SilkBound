@@ -18,6 +18,14 @@ This is original Starsilk fiction and game code, not a Starbound reskin. Starsil
 
 Recipes, resource spending, terrain placement, health/oxygen/heat exposure, enemy attacks, ship upgrades, planet gates, rescues and persistent saves are connected gameplay systems rather than menu-only labels.
 
+## Title, Continue, and recovery
+
+On normal Android/desktop launch, **Mission Control** now opens a dedicated SilkBound title interface above a paused, non-interactive planetary scene. An existing living expedition offers **Continue expedition**; a first-time install offers **Begin first expedition**. Starting a different captain while a save exists requires a second explicit confirmation. Cancel and Settings always return safely to the title without deleting or overwriting progression. The game does not automatically save during the unconfirmed title screen, even if Android backgrounds the app.
+
+In gameplay, Pause -> Settings / Field Log / Compendium -> Back returns to the prior menu before resuming; likewise, ship navigation and cargo storage return to the ship console. Pause also provides **Save and return to title**. The deceased captain cannot be continued or revived; the terminal death interface has no dismissible Close path, while the next expedition remains available.
+
+This source change has passed local Godot validation, but physical Android title touch/back testing and a new CI APK build are still pending for the uncommitted implementation.
+
 ## Controls
 
 ### Touch (landscape)
@@ -81,3 +89,11 @@ See:
 - [`docs/ANDROID_FIELD_TEST.md`](docs/ANDROID_FIELD_TEST.md) — repeatable Android-device manual QA and proof recording.
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — matched headless benchmark method and remaining performance unknowns.
 - [`OPERATIONAL_STATE.md`](OPERATIONAL_STATE.md) — current verified and unverified project control plane.
+
+## Guided first expedition and compact Android touch controls (local candidate)
+
+New captains receive five actionable field-guide steps: **move, break real terrain, scan, craft shelter walls, and return to the ship console**. Progress only advances after the corresponding action succeeds and saves in an optional `onboarding_step` field. Old save files lack that field and skip the guide rather than being interrupted. From the title or Pause menu, open **Field guide / how to play**; during a live expedition, the guidance can be skipped without losing access to the guide.
+
+Compact landscape windows enlarge actual action hitboxes and captions instead of simply scaling them down. All ten controls remain functional, including the flipped left-handed layout. The eight-slot build hotbar is now **horizontally swipeable**, keeping large slots without hiding slots 6–8. A selected slot scrolls into view, but periodic HUD refreshes never override a manual swipe. The field message stays above the enlarged rail.
+
+**Current evidence:** Godot 4.7.2 on macOS, 267/267 assertions, import and startup smoke; gameplay rendered at 720 × 405 on all three planets. The new features remain uncommitted locally; physical Android usability and a new APK have not been verified.

@@ -109,3 +109,64 @@ Policy: append new dated entries; do not erase history.
 - **Preserved:** procedural seed state, resource economy, ship repair/travel, original player/NPC/enemy animation sheets, source assets, audio, touch-pointer ownership, save schema and collision fidelity. No new external asset or library; standard-library generator remains reproducible.
 - **Validation:** Godot 4.7.2 macOS import, `tools/validate_project.sh` PASS with 204 assertions / 0 failures and startup smoke; native GUI captured inventory plus all three planets at 1280x720. `git diff --check` passed. No physical Android evidence, measured FPS uplift, new APK/export CI proof or PR merge is claimed by this source record.
 - **Git scope:** update only 15 attributable source/data/documentation files; Godot-generated `.import` and `.uid` sidecars are intentionally left untracked. Commit/push evidence belongs to Git history/Actions and must be checked separately.
+
+## 2026-10-12 — First approved Game OMNI implementation batch (P001, P002, P003)
+
+### Repository and authority
+- Project: `westkitty/SilkBound`; existing local checkout: `/Users/bigmac/SilkBound-OMNI`.
+- Branch/starting HEAD: `uplift/glassfall-evidence-20261011`, `c8c798571d1dba12b50459be778ac5b967947b05`.
+- The user requested implementation after receiving Game OMNI Evaluation. Implementation scope was bounded to three evidenced first-priority groups. This does **not** confer commit, push, merge, dependency-update or Android publishing authority; no such action was performed for this batch.
+- Pre-existing untracked `.import` and `.uid` generated sidecars were preserved unmodified and remain untracked. No pre-existing tracked changes were found.
+
+### Verified defects, changes, and preservation
+- **D001 / P001 — terminal death softlock (P1):** Running the previous project, Death -> Close hid the only restart option, while the ended session stayed frozen. The terminal dialogue now suppresses Close/X/Back rather than hiding the restart route; a new captain is an explicit distinct life, not a canon resurrection. Godot regression probes cover death, Close, gameplay input rejection and actual new-expedition transition.
+- **D002 / P002 — Back navigation (P2):** Pause -> Settings -> Close previously unpaused. Modal-kind history now returns to Pause and handles ship/navigation, ship/storage, and title/settings routes. Escape/back respects this chain and does not unlock terminal states. No replacement menu framework or dependency was introduced.
+- **P003 — title / Continue:** Existing procedural world, ship art and panel language now compose a title with first-run Begin, valid-save Continue, saved-game replacement confirmation, and a memorial entry for an ended expedition. Selection never overwrites before confirmation. An Android pause/close at title skips game save. Pause can save and return to title without losing world modifications.
+- **Protected:** offline single-player, save JSON schema, death finality, no player Starsilk handling, world seeds, mining, construction, ship progression, scanner, original authored assets, accessibility settings, old test-mode launch contract, and PR #2 draft boundary.
+
+### Validation evidence
+- Baseline: Godot 4.7.2 `tools/validate_project.sh` passed 204 assertions / 0 failures.
+- New candidate: Godot 4.7.2 `tools/validate_project.sh` passed 234 assertions / 0 failures, full resource import and bounded startup smoke.
+- Native isolated tests cover title begin/continue, non-destructive confirmation cancel, confirmed new life, menu Back stack, dead-run memorial and restart, and tested unchanged gameplay contracts.
+- Godot GUI screenshot evidence: `/Users/bigmac/.cache/silkbound-omni/omni-title.png` and `omni-title-settings.png` (1280x720), held only in temporary local working cache, not submitted as production APK screenshots.
+- Validation limits: no new GitHub CI run, APK export, Android ADB/mobile test, controller feel measurement, thermal or battery measurement. Existing CI success at `c8c7985` does not transfer automatically to these edits.
+
+### Remaining work
+1. Physical Android title, touch and Back-route QA; detect viewport clipping and system gesture collisions.
+2. P004 first-run onboarding, P006 touch/layout refinements, P017 measured Android frame pacing.
+3. P018 isolate Godot's known two resource references at test exit.
+4. Continue other Game OMNI proposals in bounded, separately validated work batches.
+5. Stage/commit/push only on a future explicit Git-delivery instruction.
+
+### Git delivery
+- New implementation commit: **not authorized / not created**.
+- Push/merge: **not authorized / not performed**.
+
+## 2026-10-12 — Game OMNI second bounded batch: P004, P006, P018
+
+### Starting point and authority
+- Preserved prior local uncommitted P001/P002/P003 work on `uplift/glassfall-evidence-20261011`; source base commit `c8c798571d1dba12b50459be778ac5b967947b05`.
+- Implementation permission via user continuation "go on"; no authority inferred for commit, push, merge, dependency installation or production APK publication.
+- Existing Godot-generated untracked .uid/.import sidecars left in place and excluded from all delivery claims.
+
+### P004 — first expedition guidance
+- Five real milestones: movement, terrain destruction, scan, craft Shelter walls ×2, physical ship console. Actual game events, not clicking "Next", advance the HUD. Guide can be viewed from title/Pause, resumed, or skipped.
+- New optional `onboarding_step` save field defaults to complete for old saves. A new captain restarts guidance. No quest/canon, economy, or save-version migration. Deferred event checkpoints preserve newly spawned mined resources.
+- Native tests probe all triggers, ingredient subtraction, ship proximity, state persistence, legacy behavior, skip and return routing.
+
+### P006 — compact Android control usability
+- Actual window width compensates logical hitbox size when the engine downscales a 1280 reference canvas onto narrow landscape output; caps size and preserves per-finger ownership.
+- All ten controls spaced to avoid collisions, with improved caption size, left-handed parity and a less-clipped guided objective.
+- The existing eight-slot hotbar is now a horizontally swipeable ScrollContainer, with large physical touch targets, selected-slot automatic reveal, and no quarter-second snap-back while manually scrolling.
+- Three planet GUI renders at 720 × 405 reviewed. Native regression checks verify physical touch sizes, disjoint zones, hotbar/stick separation, scrolling and both handed layouts. **No physical Android testing or FPS measurement.**
+
+### P018 — forensic differential and next probe
+- Confirmed baseline Ubuntu CI run `38304192370` leak diagnostics: 7 ObjectDB instances, 2 resources retained at test exit, despite 204 passing assertions.
+- Three macOS Godot 4.7.2 verbose runs of the new 264-assertion suite: 0 test failures, 0 corresponding lifetime warnings.
+- Root cause remains unknown and unverified on Linux. Android CI test invocation now records verbose detail and a distinct non-suppressing warning annotation for future source revisions. Details in `docs/QQQ_RESOURCE_LIFETIME.md`.
+
+### Validation and boundaries
+- Final macOS Godot 4.7.2 `tools/validate_project.sh`: import, **267 assertions/zero failures**, startup smoke PASS. Test-validator self-check and whitespace checks run separately.
+- Preserved original ship and player art, Starsilk canon limits, procedural seeds, saved terrain/quests, offline operation and P001/P002/P003 menu protections.
+- No local Android SDK export, new GitHub CI, hardware performance trace, resource-leak repair claim, commit/push/merge/release for this batch.
+- Final three additional native checks verify title guide / Back safety and backward compatibility with legacy saves missing the optional guide key: **267 assertions, zero failures**. Prior three macOS verbose lifetime runs were at 264 and remain distinct historical evidence.

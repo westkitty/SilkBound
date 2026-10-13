@@ -7,12 +7,12 @@
   "project_name": "SilkBound — The Outer Reaches",
   "project_root": "github://westkitty/SilkBound",
   "artifact_path": "scenes/main.tscn",
-  "state_revision": 3,
-  "last_updated": "2026-10-12T20:19:55Z",
+  "state_revision": 5,
+  "last_updated": "2026-10-13T01:43:32Z",
   "current_baseline": {
-    "identity": "OMNI + visual upgrade candidate on draft PR #2 branch based on d4028018; locally validated with Godot 4.7.2",
+    "identity": "GitHub PR #2 c8c7985 Android CI verified; local uncommitted Game OMNI P001-P004/P006 plus P018 diagnostic instrumentation",
     "state": "current-baseline",
-    "last_verified": "2026-10-12T20:19:55Z"
+    "last_verified": "2026-10-13T01:43:32Z"
   },
   "scope_boundaries": [
     "Godot 4.7.2 offline Android ARM64 survival game",
@@ -30,7 +30,7 @@ GitHub: `westkitty/SilkBound`. Offline original Godot 4.7.2 landscape Android AR
 
 `main`: `a8c896cc6e9181b84f63fee939eed26c8687eb65` (prior verified merge). Draft PR #2 feature implementation: `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab` (Godot/Android CI verified). Later documentation revision may differ without changing executable code.
 
-The 2026-10-12 OMNI + visual candidate passed macOS Godot 4.7.2 import, 204 assertions/0 failures and startup smoke. Godot gameplay was rendered at 1280x720 on Ashlands, Glassfall and Drowned Remnant; upgraded inventory/HUD was visually captured. Android CI for this candidate and physical-device gameplay require fresh verification after Git delivery.
+GitHub Actions 38304192370 verified commit c8c798571d1dba12b50459be778ac5b967947b05: 204 assertions / zero failures, Godot import/startup, Android ARM64 APK export and artifact 11771254350. The TWO new uncommitted Game OMNI batches together pass macOS Godot 4.7.2 import, 267 assertions / zero failures and startup. Title/Settings rendered at 1280x720; all three planets rendered at 720x405. New Android CI/physical device proof is pending.
 
 ## 3. Artifact Contract
 
@@ -132,9 +132,41 @@ Three seeded planets; salvaging, crafting, sheltering, surviving, surveying Glas
 - Evidence: three planetary screens and 27-icon inventory/HUD screenshot; local Godot 4.7.2 suite 204/0
 <!-- /operational-state:entry -->
 
+<!-- operational-state:entry
+{
+  "id": "VER-005",
+  "title": "Game OMNI shell death, navigation and title flows",
+  "state": "verified",
+  "evidence": "Big Mac Godot 4.7.2 local candidate: 234 regression assertions, zero failures, import and startup smoke; isolated death/Back/title/confirm tests and 1280x720 title GUI captures",
+  "artifact_revision": "Uncommitted local working tree based on c8c798571d1dba12b50459be778ac5b967947b05",
+  "recheck_trigger": "Title, menu, save, death, input or HUD source changes"
+}
+-->
+### VER-005 — Game OMNI shell death, navigation and title flows
+
+- State: **verified in local Godot runtime**, not on Android device
+- Evidence: death-screen softlock fixed, submenu Back paths validated, title and confirmation verified with 234 assertions / zero failures, import and startup smoke; screenshot evidence preserved in local cache
+<!-- /operational-state:entry -->
+
+<!-- operational-state:entry
+{
+  "id": "VER-006",
+  "title": "Five-step field guide and compact landscape touch controls",
+  "state": "verified",
+  "evidence": "macOS Godot 4.7.2 local validator: 267 assertions/zero failures, three 720x405 gameplay captures; native tests cover real mining, scanning, crafting, ship, saved guide progress, separated hit targets and touch rail scrolling",
+  "artifact_revision": "Uncommitted worktree based on c8c798571d1dba12b50459be778ac5b967947b05",
+  "recheck_trigger": "Onboarding, HUD, saves, touch event paths, mobile viewport behavior"
+}
+-->
+### VER-006 — Five-step field guide and compact landscape touch controls
+
+- State: verified locally in Godot, not on physical Android.
+- Evidence: 267 assertions / zero failures; three 720x405 captures and tested compact touch layout.
+<!-- /operational-state:entry -->
+
 ## 6. Known Not Working
 
-No currently verified production regression on final implementation HEAD. An older one-shot tile timing comparison was unsound and superseded, not a confirmed code failure.
+The pushed c8c7985 baseline has a reproduced death-dialog Close trap and Settings-from-Pause Back inconsistency; both repaired in the local uncommitted P001/P002/P003 source. The baseline Ubuntu CI also reported seven ObjectDB instances and two resources retained at test exit, but three macOS verbose runs on the current candidate showed no such warnings. Linux root cause is unknown, not a confirmed gameplay resource leak. Native Android QA remains pending.
 
 ## 7. Implemented but Unverified
 
@@ -156,16 +188,16 @@ No currently verified production regression on final implementation HEAD. An old
 <!-- operational-state:entry
 {
   "id": "UNV-002",
-  "title": "Android export of new OMNI and visual candidate",
+  "title": "Android export of both new local Game OMNI implementation batches",
   "state": "implemented-unverified",
-  "evidence": "Local Godot import, 204 assertions and rendered screenshots; new GitHub Android APK from this candidate was not yet verified when authored",
-  "validation_method": "Verify GitHub Actions Android APK artifact for exact pushed commit and run Android field-test checklist"
+  "evidence": "Baseline c8c7985 Android CI run 38304192370/artifact 11771254350 succeeded; new uncommitted title/death/menu/field guide/touch/diagnostic changes have no Android build yet",
+  "validation_method": "After separately authorized Git delivery, verify GitHub Actions APK for that exact new commit and test physical Android title/back/death paths"
 }
 -->
-### UNV-002 — Android export of new OMNI and visual candidate
+### UNV-002 — Android export of both new local Game OMNI implementation batches
 
 - State: **implemented-unverified**
-- Evidence: macOS validation and screenshots; new Android CI/APK and physical-device test remain to be confirmed separately
+- Evidence: baseline c8c7985 CI passed; new local P001-P004/P006 source lacks a fresh Android CI APK and physical-device proof
 <!-- /operational-state:entry -->
 
 ## 8. Unknown or Evidence-Stale State
@@ -192,21 +224,37 @@ Actual on-device FPS/p95, GPU draw commands, low-memory behavior, long-session s
 <!-- operational-state:entry
 {
   "id": "PND-002",
-  "title": "Fresh Android CI and hardware evidence for OMNI / visual candidate",
+  "title": "Fresh Android CI and hardware evidence for new Game OMNI shell candidate",
   "state": "pending",
-  "evidence": "Exact candidate-head Android CI, fresh APK artifact and native device field testing not confirmed in this local source record",
+  "evidence": "GitHub c8c7985 APK verified; new local title/death/navigation edits have not been committed, pushed or built on Android",
   "blocks_completion": true
 }
 -->
-### PND-002 — Fresh Android CI and hardware evidence for OMNI / visual candidate
+### PND-002 — Fresh Android CI and hardware evidence for new Game OMNI shell candidate
 
 - State: **pending**
-- Evidence: exact new Android APK artifact and native field testing require independent verification
+- Evidence: uncommitted shell candidate requires separately authorized Git delivery, new CI APK, and hardware field-test evidence
+<!-- /operational-state:entry -->
+
+<!-- operational-state:entry
+{
+  "id": "PND-003",
+  "title": "Linux Godot ObjectDB and resource retention at test exit",
+  "state": "pending",
+  "evidence": "Ubuntu CI run 38304192370 job 114994124976: 7 ObjectDB instances and 2 Resources at test exit; 3 new macOS verbose trials show no warnings",
+  "blocks_completion": false,
+  "validation_needed": "Fresh Linux CI with verbose trace, identify retained object types, isolate ownership, repair only when reproduced"
+}
+-->
+### PND-003 — Linux Godot ObjectDB and resource retention at test exit
+
+- State: pending, platform-specific.
+- Evidence: Ubuntu warnings confirmed, no macOS reproduction; new CI verbosity unverified until authorized push.
 <!-- /operational-state:entry -->
 
 ## 10. Active Decisions, Defaults, and Prohibitions
 
-Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. No force-push, dependencies, destructive history changes, canon additions or premature production-release claims. Existing GitHub repository is already initialized; do not run `git init` again.
+Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. Current P001-P003 implementation authority covers local file edits and validation only, not stage/commit/push/merge. No force-push, dependencies, destructive history changes, canon additions or premature production-release claims. Existing GitHub repository is already initialized; do not run `git init` again.
 
 ## 11. Validation and Evidence Matrix
 
@@ -220,12 +268,15 @@ Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. No for
 | PND-001 | pending | docs/ANDROID_FIELD_TEST.md | Before merging PR #2 |
 | VER-003 | verified locally | Big Mac Godot 4.7.2, 204 tests | Source/test changes |
 | VER-004 | verified on macOS | Three planetary captures, inventory screenshot | Visual source changes |
-| UNV-002 | implemented-unverified | New Android APK not yet verified in local source | Fresh CI and APK |
-| PND-002 | pending | New CI + physical device | Exact new head CI and hardware QA |
+| VER-005 | verified on macOS | Prior 234-check title/death tests, covered by current suite | Menu/save/death source changes |
+| VER-006 | verified locally | 267 native assertions and three 720x405 captures | Onboarding/touch/save source changes |
+| UNV-002 | implemented-unverified | Baseline c8c7985 CI success; new OMNI code unbuilt | Fresh CI + physical Android |
+| PND-002 | pending | New OMNI batches uncommitted | Git delivery, fresh CI + physical Android |
+| PND-003 | pending | Linux CI resource lifetime warnings | Verbose Linux CI forensic review |
 
 ## 12. Current Change Scope and Impact Radius
 
-Bounded performance changes: resolved tile cache, focused scanner overlay redrawing, priority material bearing, viewport-only art chunk culling, and transient-state repair. Changed source/test paths: `scripts/world/world_grid.gd`, `scripts/core/game.gd`, `tests/run_all.gd`. Full collision and saved modifications remain authoritative.
+Current local Game OMNI work P001-P004/P006 and P018 instrumentation: title/death/menu repair, optional real-action field guide, compact touch hitboxes and a swipeable large-slot hotbar, expanded native tests and verbose CI lifetime reporting. Changed source includes core game, GameHUD, touch action drawing, regression tests and Android workflow. Preserve offline save/load, older save compatibility, original assets, Starsilk canon limits, world geometry/collision, ship economy, and independent touch-pointer ownership. Do not equate macOS validation with Android hardware acceptance.
 
 ## 13. Compact Revision Log
 
@@ -234,3 +285,7 @@ Bounded performance changes: resolved tile cache, focused scanner overlay redraw
 - Revision 2, 2026-10-12: OMNI local working tree validated; solidity-preserving terrain changes now skip physics rebuilds, valid staged saves recover only after primary/backup fail, test runner teardown is clean. No remote CI, APK, device proof or Git publication for these edits.
 
 - Revision 3, 2026-10-12: authored asset uplift proof (full-screen biome backdrop, four deterministic terrain variants, 27 semantic item icons, UI integration). Local Godot import, 204 assertions / 0 failures, startup and fresh inventory capture passed. New Android CI / hardware evidence still pending.
+
+- Revision 4, 2026-10-12: implemented P001 terminal death non-dismissable route, P002 context-aware Back and P003 title/Continue/confirm/save-suspension guards. Local Godot 4.7.2 234 assertions/0 failures, GUI captures, import and startup PASS. Baseline c8c7985 CI successful, but new local changes have no commit/push/APK/hardware qualification yet.
+
+- Revision 5, 2026-10-12: P004 real-action guide, P006 compact hitboxes/scrollable hotbar, P018 CI lifetime diagnostic expansion. Godot macOS 4.7.2 267 assertions/0 failures, startup/import, three 720x405 planet screenshots; three verbose local runs free of lifecycle warnings. No new Git commit, push, Linux CI artifact or native Android proof.

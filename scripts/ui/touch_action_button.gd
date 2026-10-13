@@ -71,6 +71,6 @@ func _draw() -> void:
 			caption,
 			HORIZONTAL_ALIGNMENT_CENTER,
 			size.x,
-			15,
+			clampi(roundi(15.0 * minf(1.45, size.x / 62.0)), 15, 22),
 			Color(0.91, 0.97, 0.97)
 		)

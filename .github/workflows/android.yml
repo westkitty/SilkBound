@@ -113,7 +113,12 @@ jobs:
         run: |
           set -euo pipefail
           test_status=0
-          "$GODOT_BIN" --headless --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
+          # Verbose diagnostics identify retained Resource/ObjectDB types on
+          # Linux, where teardown warnings were seen but not reproduced on macOS.
+          "$GODOT_BIN" --headless --verbose --path . --script res://tests/run_all.gd 2>&1 | tee tests/test-results.log || test_status=$?
+          if grep -Eiq 'ObjectDB instances were leaked|resources still in use at exit|RID allocations .*leaked' tests/test-results.log; then
+            echo "::warning file=tests/run_all.gd,title=Godot teardown resources::Test process reports retained engine resources. Inspect the verbose lifetime trace; this is not proof of an in-game leak."
+          fi
           if [[ "$test_status" -ne 0 ]] || grep -Eiq 'SCRIPT ERROR|Parse Error' tests/test-results.log; then
             echo "::error file=tests/run_all.gd::GDScript tests failed with exit status $test_status. Diagnostics follow."
             details="$(tail -n 80 tests/test-results.log)"
