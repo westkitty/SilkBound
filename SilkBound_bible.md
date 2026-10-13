@@ -170,3 +170,12 @@ Policy: append new dated entries; do not erase history.
 - Preserved original ship and player art, Starsilk canon limits, procedural seeds, saved terrain/quests, offline operation and P001/P002/P003 menu protections.
 - No local Android SDK export, new GitHub CI, hardware performance trace, resource-leak repair claim, commit/push/merge/release for this batch.
 - Final three additional native checks verify title guide / Back safety and backward compatibility with legacy saves missing the optional guide key: **267 assertions, zero failures**. Prior three macOS verbose lifetime runs were at 264 and remain distinct historical evidence.
+
+
+## 2026-10-13 — Game OMNI implementation commit and Git delivery checkpoint
+
+- Implementation commit: `eb571db95fae0dd75001e0b708a1f89e14312396` (parent `c8c798571d1dba12b50459be778ac5b967947b05`), on the existing `uplift/glassfall-evidence-20261011` feature branch. Exactly 12 attributable code, test, workflow, and documentation files were committed.
+- Validated before the implementation commit: macOS Godot 4.7.2 import, 267 regression assertions / zero failures, startup smoke; workflow YAML parse and validator self-test. Title and three planets have native macOS graphical captures. Physical Android playability is not verified.
+- This separate documentation follow-up records the implementation SHA without requiring this documentation commit to contain its own hash. Older entries describing earlier uncommitted work remain historically accurate at the time of authorship.
+- Push to the existing draft PR #2 branch and fresh Android CI were authorized by the user's continuation, but delivery is not a verified fact until the remote SHA and matching CI are checked. Do not merge main, force-push, deploy or release.
+- Hardware field testing, real-device frame pacing and Linux Godot ObjectDB/resource-at-exit diagnosis remain open.

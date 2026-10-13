@@ -7,12 +7,12 @@
   "project_name": "SilkBound — The Outer Reaches",
   "project_root": "github://westkitty/SilkBound",
   "artifact_path": "scenes/main.tscn",
-  "state_revision": 5,
-  "last_updated": "2026-10-13T01:43:32Z",
+  "state_revision": 6,
+  "last_updated": "2026-10-13T09:02:51Z",
   "current_baseline": {
-    "identity": "GitHub PR #2 c8c7985 Android CI verified; local uncommitted Game OMNI P001-P004/P006 plus P018 diagnostic instrumentation",
+    "identity": "Local feature branch implementation commit eb571db95fae0dd75001e0b708a1f89e14312396 (267 local Godot assertions passed); remote delivery and Android CI pending",
     "state": "current-baseline",
-    "last_verified": "2026-10-13T01:43:32Z"
+    "last_verified": "2026-10-13T09:02:51Z"
   },
   "scope_boundaries": [
     "Godot 4.7.2 offline Android ARM64 survival game",
@@ -30,7 +30,7 @@ GitHub: `westkitty/SilkBound`. Offline original Godot 4.7.2 landscape Android AR
 
 `main`: `a8c896cc6e9181b84f63fee939eed26c8687eb65` (prior verified merge). Draft PR #2 feature implementation: `4e4b99802b44a7fe70d8239c2e2b39c1b2a3e9ab` (Godot/Android CI verified). Later documentation revision may differ without changing executable code.
 
-GitHub Actions 38304192370 verified commit c8c798571d1dba12b50459be778ac5b967947b05: 204 assertions / zero failures, Godot import/startup, Android ARM64 APK export and artifact 11771254350. The TWO new uncommitted Game OMNI batches together pass macOS Godot 4.7.2 import, 267 assertions / zero failures and startup. Title/Settings rendered at 1280x720; all three planets rendered at 720x405. New Android CI/physical device proof is pending.
+GitHub Actions 38304192370 verified commit c8c798571d1dba12b50459be778ac5b967947b05: 204 assertions / zero failures, Godot import/startup, Android ARM64 APK export and artifact 11771254350. The TWO new uncommitted Game OMNI batches together pass macOS Godot 4.7.2 import, 267 assertions / zero failures and startup. Title/Settings rendered at 1280x720; all three planets rendered at 720x405. Exact new Android CI and physical device proof are pending. Source implementation is committed locally as eb571db95fae0dd75001e0b708a1f89e14312396; push and documentation follow-up remain pending as of this record.
 
 ## 3. Artifact Contract
 
@@ -166,7 +166,7 @@ Three seeded planets; salvaging, crafting, sheltering, surviving, surveying Glas
 
 ## 6. Known Not Working
 
-The pushed c8c7985 baseline has a reproduced death-dialog Close trap and Settings-from-Pause Back inconsistency; both repaired in the local uncommitted P001/P002/P003 source. The baseline Ubuntu CI also reported seven ObjectDB instances and two resources retained at test exit, but three macOS verbose runs on the current candidate showed no such warnings. Linux root cause is unknown, not a confirmed gameplay resource leak. Native Android QA remains pending.
+The pushed c8c7985 baseline had a reproduced death-dialog Close trap and Settings-from-Pause Back inconsistency; both were repaired and locally verified in source implementation commit eb571db. Remote and Android verification must still be checked. The baseline Ubuntu CI also reported seven ObjectDB instances and two resources retained at test exit, but three macOS verbose runs on the current candidate showed no such warnings. Linux root cause is unknown, not a confirmed gameplay resource leak. Native Android QA remains pending.
 
 ## 7. Implemented but Unverified
 
@@ -190,14 +190,14 @@ The pushed c8c7985 baseline has a reproduced death-dialog Close trap and Setting
   "id": "UNV-002",
   "title": "Android export of both new local Game OMNI implementation batches",
   "state": "implemented-unverified",
-  "evidence": "Baseline c8c7985 Android CI run 38304192370/artifact 11771254350 succeeded; new uncommitted title/death/menu/field guide/touch/diagnostic changes have no Android build yet",
+  "evidence": "Baseline c8c7985 Android CI run 38304192370/artifact 11771254350 succeeded; new local source commit eb571db covering title/death/menu/guide/touch/diagnostic improvements has no verified Android build yet",
   "validation_method": "After separately authorized Git delivery, verify GitHub Actions APK for that exact new commit and test physical Android title/back/death paths"
 }
 -->
 ### UNV-002 — Android export of both new local Game OMNI implementation batches
 
 - State: **implemented-unverified**
-- Evidence: baseline c8c7985 CI passed; new local P001-P004/P006 source lacks a fresh Android CI APK and physical-device proof
+- Evidence: baseline c8c7985 CI passed; local P001-P004/P006 commit lacks a fresh Android CI APK and physical-device proof
 <!-- /operational-state:entry -->
 
 ## 8. Unknown or Evidence-Stale State
@@ -226,14 +226,14 @@ Actual on-device FPS/p95, GPU draw commands, low-memory behavior, long-session s
   "id": "PND-002",
   "title": "Fresh Android CI and hardware evidence for new Game OMNI shell candidate",
   "state": "pending",
-  "evidence": "GitHub c8c7985 APK verified; new local title/death/navigation edits have not been committed, pushed or built on Android",
+  "evidence": "GitHub c8c7985 APK verified; new local title/death/navigation and guide/touch changes were committed as eb571db; remote push and Android build unverified",
   "blocks_completion": true
 }
 -->
 ### PND-002 — Fresh Android CI and hardware evidence for new Game OMNI shell candidate
 
 - State: **pending**
-- Evidence: uncommitted shell candidate requires separately authorized Git delivery, new CI APK, and hardware field-test evidence
+- Evidence: locally committed shell candidate requires verified normal push, new CI APK, and physical-device field-test evidence
 <!-- /operational-state:entry -->
 
 <!-- operational-state:entry
@@ -254,7 +254,7 @@ Actual on-device FPS/p95, GPU draw commands, low-memory behavior, long-session s
 
 ## 10. Active Decisions, Defaults, and Prohibitions
 
-Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. Current P001-P003 implementation authority covers local file edits and validation only, not stage/commit/push/merge. No force-push, dependencies, destructive history changes, canon additions or premature production-release claims. Existing GitHub repository is already initialized; do not run `git init` again.
+Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. The most recent user-authorized continuation includes stage, commit and normal push to the existing PR #2 feature branch, with CI verification. It does not permit merge, force-push, release or deployment. No force-push, dependencies, destructive history changes, canon additions or premature production-release claims. Existing GitHub repository is already initialized; do not run `git init` again.
 
 ## 11. Validation and Evidence Matrix
 
@@ -271,7 +271,7 @@ Maintain draft PR #2 on `uplift/glassfall-evidence-20261011`, not `main`. Curren
 | VER-005 | verified on macOS | Prior 234-check title/death tests, covered by current suite | Menu/save/death source changes |
 | VER-006 | verified locally | 267 native assertions and three 720x405 captures | Onboarding/touch/save source changes |
 | UNV-002 | implemented-unverified | Baseline c8c7985 CI success; new OMNI code unbuilt | Fresh CI + physical Android |
-| PND-002 | pending | New OMNI batches uncommitted | Git delivery, fresh CI + physical Android |
+| PND-002 | pending | OMNI implementation committed locally as eb571db | Push verification, fresh CI + physical Android |
 | PND-003 | pending | Linux CI resource lifetime warnings | Verbose Linux CI forensic review |
 
 ## 12. Current Change Scope and Impact Radius
@@ -289,3 +289,5 @@ Current local Game OMNI work P001-P004/P006 and P018 instrumentation: title/deat
 - Revision 4, 2026-10-12: implemented P001 terminal death non-dismissable route, P002 context-aware Back and P003 title/Continue/confirm/save-suspension guards. Local Godot 4.7.2 234 assertions/0 failures, GUI captures, import and startup PASS. Baseline c8c7985 CI successful, but new local changes have no commit/push/APK/hardware qualification yet.
 
 - Revision 5, 2026-10-12: P004 real-action guide, P006 compact hitboxes/scrollable hotbar, P018 CI lifetime diagnostic expansion. Godot macOS 4.7.2 267 assertions/0 failures, startup/import, three 720x405 planet screenshots; three verbose local runs free of lifecycle warnings. No new Git commit, push, Linux CI artifact or native Android proof.
+
+- Revision 6, 2026-10-13: implementation commit eb571db95fae0dd75001e0b708a1f89e14312396 created on PR #2 feature branch, with 267/267 local Godot assertions, project import/startup and YAML gate passed. Normal push and exact-head CI verification pending. No main merge, release, or physical Android sign-off claimed.
